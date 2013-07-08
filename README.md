@@ -1,15 +1,11 @@
-cursely
+recursely
 =======
 
-Recursion anytime without eating the stack.
+A utility framework which manages the state represented by parameters as return values between repeated function invocations.
 
-The intent is to facilitate the use of recursive programming without using the stack - something already available in 
-functional programming using constructs and functions such as trampoline and lazy evaluation. I try here to generalize this
-further by moving all recursion steps to call frames, and base values to value frames on an explicit stack data structure.
+The goal is to provide a facility which can morph any recursive function (including any number of recursive functions) into 
+a non-recursive one, with minimal change.
 
-Also in the plans, a small DSL/macro to adapt a purely recurisve funciont in to one adapted to leverage the framework.
-
-Initially in Clojure, but perhaps this can be done also in other functional languages where applicable.
-
-
-
+Functional programming languages already offer a great deal of flexibility and optimization techniques to allow recursive 
+programming with constructs and functions such as trampoline and lazy evaluation, with a bit of work from the programmer. 
+I try here to provide a one-stop shop for recursion optimization which does nothing else than emulate the call stack by "inlining it".
