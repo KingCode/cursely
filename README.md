@@ -3,7 +3,7 @@ recursely
 
 "Move a recursive descent's state from the JVM stack to the heap": recursely is a small framework which enables the 
 use of recursive style programming on a single frame stack with any traditional use of recursion, including any level of
-nested or mutually recursive multiply defined functions. 
+nested or mutually recursive functions. 
 
 Functional programming languages already offer a great deal of flexibility and optimization techniques to allow recursive 
 programming with constructs and functions such as trampoline and lazy evaluation, with a bit of work from the programmer. 
@@ -11,11 +11,14 @@ programming with constructs and functions such as trampoline and lazy evaluation
 I try here to provide a one-stop shop for recursion optimization which does nothing else than (selectively) emulate
 the call stack by "inlining it".
 
-At the moment, recursely usage comes from 'adapting' a traditional recursive function into a recursely compliant one - see usage below
-and comments in /src/recursely/recursely.ccore.clj. 
+At the moment, recursely usage comes from adapting a traditional recursive function into a recursely compliant one - see below.
+Although usable, manual adaptation is error prone and not user friendly - in the works is a macro API to do that. Also planned are
+configurable memoization, and performance improvements from tuning the data structures storing the recursive state.
 
 Adapting a recursive function requires awareness of the order of invocation of recurrent calls, and knowledge of the 
 'rules of the game': the goal is to provide eventually a macro which does the work, e.g. using a simple variable markup vocabulary.
+
+Current API is provided by recursely.ccore functions functions play, hval, hfn and hcall - see usage notes below. 
 
 
 Usage
@@ -31,7 +34,7 @@ its recursely adaptation and usage:
                (KS tail capacity)
                 (max (KS tail capacity)  (+ v (KS tail (- capacity c)))))))) 
 
-2) Function A onverted to recursely compliant APrime  - note the stack, pos prefixing the argument list, 
+2) Function KS converted to recursely compliant adapted-KS - note the stack, pos prefixing the argument list, 
 and calls to the public API functions: hval, hcall and rewind, as well as the order by which 
 they are invoked:
 
@@ -65,7 +68,7 @@ they are invoked:
 
 3) Evaluate with:
 
-    (recursely.play adapted-KS coll capacity)
+    (recursely.ccore/play adapted-KS coll capacity)
 
 See recursely.ccore-test for full example
 
