@@ -16,11 +16,7 @@ At the moment, recursely usage comes from adapting a traditional recursive funct
 Although usable, manual adaptation is error prone and not user friendly - in the works is a macro API to do that. Also planned are
 configurable memoization, and performance improvements from tuning the data structures storing the recursive state.
 
-Adapting a recursive function requires awareness of the order of invocation of recurrent calls, and knowledge of the 
-'rules of the game': the goal is to provide eventually a macro which does the work, e.g. using a simple variable markup vocabulary.
-
 Current API is provided by recursely.ccore functions functions play, hval, hfn and hcall - see usage notes below. 
-
 
 Usage
 =====
