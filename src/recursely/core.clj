@@ -2,7 +2,7 @@
   (:use recursely.ccore 
         [clj-utils [core :only [thread-it]]]))
 
-(comment "API which transforms a recursive function into a non-recursive one, e.g. 
+(comment "(Not implemented) API which transforms a recursive function into a non-recursive one, e.g. 
     (defn KS [ coll, capacity ]
       (if (empty? coll) 0
         (let [ [c v] (-> (first coll) (#(vector (cost %) (value %)))) 
@@ -28,7 +28,7 @@ e.g.
                         ($f2+ v (KS tail capacity) (- capacity c)))))))
 
 creates a adapted function KSprime which takes the same parameters and yields the same value as KS, 
-but does not consume the stack. Not implemented"
+but does not consume the stack. 
 
 Two or more mutually recursely functions can be defined at once:
 
@@ -37,3 +37,21 @@ where each func spec is a name-args-body
 "
 )
 
+(defn hoist-spec
+"Yields a map of symbols from form to maps of {:type <hfn, hcall, nil> :numargs <positive int> :val}
+ for all symbols in form requiring hoisting by recursely.
+ "
+ [ form ]
+ )
+
+ (defn register-funcs
+ "Yields a set of function symbols from func-specs with each func spec is a (funcname, ([& args] body)*)
+ "
+ [ func-spec & func-specs ]
+ )
+
+(defmacro defrecursely
+"Creates a recursely adapted function for each spec, where spec is a (name ([& args] body)*)."
+[ spec & specs ] )
+
+  
