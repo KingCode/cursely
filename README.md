@@ -1,9 +1,10 @@
 recursely
 =======
 
-"Move a recursive descent's state from the JVM stack to the heap": recursely is a small framework which enables the 
-use of recursive style programming on a single frame stack with any traditional use of recursion, including any level of
-nested or mutually recursive functions. 
+*Move your recursive state from the stack to the heap*
+
+Recursely is a small framework which enables the use of recursive style programming on a single stack frame with any 
+traditional use of recursion, including any level of nested or mutually recursive functions. 
 
 Functional programming languages already offer a great deal of flexibility and optimization techniques to allow recursive 
 programming with constructs and functions such as trampoline and lazy evaluation, with a bit of work from the programmer. 
