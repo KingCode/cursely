@@ -93,13 +93,13 @@
   [(->> [(Value. v)] (insert s+ stack pos)), (inc pos) ])
 
 (defn- hoist-fn
-"See comments to hcall. Implements hcall/hval with the proper type as per
+"See comments to hcall. Implements hcall/hfn with the proper type as per
  is-Call?.
 "
 [ [stack pos] is-Call? f numargs & args ]
   (let [ 
         object (if is-Call? (Call. f numargs)
-                        (Fn. f numargs)) 
+                        (Fn. f numargs))
          vals (map #(Value. %) args) 
        ]
     [
@@ -116,7 +116,36 @@
         (+ pos 1 (count args))
      ]))
 
-(defn hcall
+
+(defn process-macro 
+[[stack pos] mf numargs args])
+
+
+(defn preprocess
+"Yields a tuple of elements counterpart to each argument, after preprocessing
+ f as a macro if applicable."
+[ [stack pos] f numargs args ]
+  (if (macro? f)
+      (process-macro [stack pos] f numargs args))
+      [ [stack pos] f numargs args])
+
+
+(defmacro hcall 
+"Preprocesses args if f is a macro, otherwise invokes hcall-impl with same args.
+"
+[ [stack pos] f numargs & args ]
+  `(apply hcall-impl (preprocess [~stack ~pos] ~f ~numargs ~args)))
+
+
+(defmacro hfn
+"Preprocesses args if f is a macro, otherwise invokes hcall-impl with same args.
+"
+[ [stack pos] f numargs & args ]
+  `(apply hfn-impl (preprocess [~stack ~pos] ~f ~numargs ~args)))
+
+
+
+(defn hcall-impl
 "Hoists a function call on the stack.
  Yields a [newstack newpos] tuple with args and f inserted at pos, and f 
  marked to be invoked with numargs values on the stack. Note that numargs
@@ -151,7 +180,7 @@
     (apply hoist-fn [stack pos] true f numargs args))
 
 
-(defn hfn
+(defn hfn-impl
 "Same as for hcall, except that the hoisted function is not aware of the stack.
  Use this for any function other than a client (recursely-adapted) function.
 "

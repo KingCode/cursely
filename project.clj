@@ -8,6 +8,7 @@
                  [robert/hooke "1.3.0"]
                  #_[clj_utils "0.1.0-SNAPSHOT"]]
 
-  :resource-paths ["lib/clj_utils-0.1.0-SNAPSHOT-standalone.jar"]
+  ;; :resource-paths ["lib/clj_utils-0.1.0-SNAPSHOT-standalone.jar"]
+  :checkouts ["clj-utils"]
   
   )

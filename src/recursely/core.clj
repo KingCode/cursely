@@ -1,7 +1,7 @@
 (ns recursely.core
   (:use recursely.ccore 
         [clojure [walk]]
-        [clj-utils [core :only [thread-it]]]))
+        [clj-utils [core :only [thread-it macro-call funcvar macro? is-case]]]))
 
 (comment "(Not implemented) API which transforms a recursive function into a non-recursive one, e.g. 
     (defn KS [ coll, capacity ]
@@ -39,21 +39,6 @@ where each func spec is a name-args-body
 )
 
 
-(defn funcvar
-"Yields the var for a macro or function symbol.
-"
-[ sym ]
-  (->> sym str (str "#'") read-string eval))
-
-
-(defn macro? 
-"Yields true if form has a macro in function position, false otherwise.
-"
-[ form ]
-  (-> (first form) funcvar meta :macro true?))
-
-
-
 (defn strip
 [ form ]
   (let [ ftok (apply str (-> (first form) str rest)) ]
@@ -75,12 +60,26 @@ where each func spec is a name-args-body
               ,@regs ]))
 
 
-#_(defn adapt-1
-"Yields an adapted form from a top-level marked up form."
-[ form ]
-  (condp))
+(defn hoist-form
+"Hoists a function call onto the stack, either as a recursely function call if found in regs,
+ or a regular function call otherwise.
+"
+[ regs form ])
 
-  
+
+
+#_(defn adapt-1
+"Yields an adapted form from a top-level marked up form; regs is a set of
+ registered function symbols"
+[ regs form ]
+  (if (list? form)
+      (condp is (first form)
+            special-symbol? (hoist-special regs form)
+            macro? (hoist-macro regs form)
+            ifn? (hoist-func regs form)
+            :else form)
+       form))
+
 
 
 (defn- parsefor-numargs
