@@ -39,6 +39,21 @@ where each func spec is a name-args-body
 )
 
 
+(defn funcvar
+"Yields the var for a macro or function symbol.
+"
+[ sym ]
+  (->> sym str (str "#'") read-string eval))
+
+
+(defn macro? 
+"Yields true if form has a macro in function position, false otherwise.
+"
+[ form ]
+  (-> (first form) funcvar meta :macro true?))
+
+
+
 (defn strip
 [ form ]
   (let [ ftok (apply str (-> (first form) str rest)) ]
