@@ -13,20 +13,19 @@
                 (max (KS tail capacity)  
                      (+ v (KS tail (- capacity c))))))))
         
-can be converted using the prefix $<value>, $<func name><numargs>, $<adapted-func name><numargs>
-for output values, non-adaptive (regular) function invocations, and adaptive (recurrent) function invocations
-respectively, where <func, adapted-func name> is a declared function symbol, <numargs> is the number of arguments
-for the associated function in the adapted code, and <value> is a form evaluated at runtime,
-e.g.
+can be converted by enclosing the function in the defrecursely macro; prefixing end of recursion 
+values (base cases) with $; and doing the same with the token in function position of each form yielding a result
+other than base cases, e.g.
 
     (defrecursely KSprime [ coll capacity ]
-        (if (empty? coll)  $0
+        (if (empty? coll)  $0                                     ;; BASE CASE VALUE
           (let [ [c v] (-> (first coll) (#(vector (cost %) (value %)))) 
                  tail (rest coll) ]
             (if (-> c (> capacity))
-                (KS tail capacity)
-                ($f2max (KS tail capacity)
-                        ($f2+ v (KS tail capacity) (- capacity c)))))))
+                ($KS tail capacity)                               ;; RETURN POINT 1
+                ($max (KS tail capacity)  
+                        (+ v (KS tail capacity) (- capacity c)))  ;; RETURN POINT 2
+                                                            ))))
 
 creates a adapted function KSprime which takes the same parameters and yields the same value as KS, 
 but does not consume the stack. 
