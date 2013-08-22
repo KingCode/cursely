@@ -2,11 +2,9 @@
  (:refer-clojure :exclude [pop peek remove replace])
     (:use clj-utils.stackp))
 
-(comment 
- " Protocols and data types which define how a stack moves from one state to the next.
-")
+(comment " Protocols and data types which define how a stack moves from one state to the next.")
 
-;;"Marks and stores a 'pure' value, i.e. with no recursely framework semantics."
+;;Marks and stores a 'pure' value, i.e. with no recursely framework semantics.
 (deftype Value [ value ]
     Object
     (toString [this] (str value)))

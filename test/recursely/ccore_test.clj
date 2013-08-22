@@ -4,7 +4,9 @@
   (:import (recursely.types Value Call Fn))
   (:import (clj_utils.stackp DefaultStack+))
   (:use  
-        [clj-utils [stackp] [debug :only [debug-info-1 debug-info]]]
+        [clj-utils [coll :only [subsq]]
+                   [stackp] 
+                   [debug :only [debug-info-1 debug-info]]]
         clojure.test
         [robert.hooke :as h]))
 
@@ -186,6 +188,7 @@
   (testing "end? should detect end-of-recursion with a single Value on the stack"
     (is (end? [(Value. 1)] 0))))
 
+
 ;;;;;;;;;;;;;;;;;;;;;
 ;;   Simple but nested, recursive counter 
 ;;;;;;;;;;;;;;;;;;;;;
@@ -193,6 +196,7 @@
 [ coll ]
     (if (empty? coll) 0
         (+ 1 (counter (rest coll)))))
+
 
 (defn adapted-counter 
 [stack pos coll] 
@@ -427,3 +431,54 @@
         ]
        (is (= exp act))
        (is (= exp-1 act-1 )))))
+
+
+(defn recursive-and
+[ & args ]
+  (if (empty? args) true
+    (and (first args) (apply recursive-and (rest args)))))
+
+(deftest recursive-and-test
+  (testing "recursive-end simple test"
+     (is (not (recursive-and true false true)))))
+
+
+(defn adapted-recursive-and
+[ stack pos & args ]
+  (if (empty? args) (hval [stack pos] true)
+    (-> (apply hcall [stack pos] adapted-recursive-and (count (rest args)) (rest args))
+        (hfn #(and %1 %2)  2 (first args))
+        (rewind pos))))
+
+
+(defn count-args
+[ & args ]
+  (if (empty? args) 0
+    (+ 1 (apply count-args (rest args)))))
+
+
+(defn adapted-count-args
+[ stack pos & args ]
+  (if (empty? args) (hval [stack pos] 0)
+    (-> (apply hcall [stack pos] adapted-count-args (-> (count args) dec) (rest args))
+        (hfn + 2 1)
+        (rewind pos))))
+
+
+(deftest variadic-test 
+  (testing "the (apply hcall ... (rest args)) API should work with a simple argument counter"
+    (let [ master (repeat 5 "arg") 
+           samples (for [ x (range 5)] (subsq master 0 x)) 
+           exps (map #(apply count-args %) samples)
+           acts (map #(apply play adapted-count-args %) samples) ]
+     (is (= exps acts)))))
+
+
+(deftest with-macro-test
+  (testing "the (apply hcall/hfn .. should work with macro wrapper functions"
+    (let [ master '(true true false true true)
+           samples (for [ x (range 5)] (subsq master 0 x)) 
+           exps (map #(apply recursive-and %) samples)
+           acts (map #(apply play adapted-recursive-and %) samples) ]
+      (is (= exps acts)))))           
+

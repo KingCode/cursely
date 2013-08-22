@@ -92,7 +92,7 @@
 [ [stack pos] v ] 
   [(->> [(Value. v)] (insert s+ stack pos)), (inc pos) ])
 
-(defn- hoist-fn
+(defn hoist-fn
 "See comments to hcall. Implements hcall/hfn with the proper type as per
  is-Call?.
 "
@@ -100,8 +100,10 @@
   (let [ 
         object (if is-Call? (Call. f numargs)
                         (Fn. f numargs))
-         vals (map #(Value. %) args) 
+         vals (if (and (= 0 numargs) (empty? args)) args 
+                    (map #(Value. %) args))
        ]
+       #_(println "hoist-fn: F=>" f "<, Call/Fn object =>" object)
     [
         ;; stack with f and args inserted
 
@@ -117,11 +119,24 @@
      ]))
 
 
-(defn process-macro 
-[[stack pos] mf numargs args])
+(defn invoke
+"Yields the result of invoking macro or function referenced by mf-sym.
+ mf-sym should be a fully qualified symbol.
+"
+([ mf-sym args]
+  (let [ f (eval `'~mf-sym) 
+         form (cons f args) ]
+
+   #_(println "invoke: FORM =>" form "<")
+    (condp cu/is-case f
+        special-symbol? (eval form)
+        macro?  (-> form macro-call eval)
+        ifn? (eval form))))
+([ mf-sym stack pos args ]
+  (invoke mf-sym (concat [stack pos] args))))
 
 
-(defn preprocess
+#_(defn preprocess
 "Yields a tuple of elements counterpart to each argument, after preprocessing
  f as a macro if applicable."
 [ [stack pos] f numargs args ]
@@ -130,22 +145,22 @@
       [ [stack pos] f numargs args])
 
 
-(defmacro hcall 
+#_(defmacro hcall 
 "Preprocesses args if f is a macro, otherwise invokes hcall-impl with same args.
 "
 [ [stack pos] f numargs & args ]
-  `(apply hcall-impl (preprocess [~stack ~pos] ~f ~numargs ~args)))
+  `(apply hcall-impl (preprocess [~stack ~pos] '~f ~numargs '~args)))
 
 
-(defmacro hfn
+#_(defmacro hfn
 "Preprocesses args if f is a macro, otherwise invokes hcall-impl with same args.
 "
 [ [stack pos] f numargs & args ]
-  `(apply hfn-impl (preprocess [~stack ~pos] ~f ~numargs ~args)))
+  `(apply hfn-impl (preprocess [~stack ~pos] '~f ~numargs '~args)))
 
 
 
-(defn hcall-impl
+(defn hcall
 "Hoists a function call on the stack.
  Yields a [newstack newpos] tuple with args and f inserted at pos, and f 
  marked to be invoked with numargs values on the stack. Note that numargs
@@ -180,7 +195,7 @@
     (apply hoist-fn [stack pos] true f numargs args))
 
 
-(defn hfn-impl
+(defn hfn
 "Same as for hcall, except that the hoisted function is not aware of the stack.
  Use this for any function other than a client (recursely-adapted) function.
 "
@@ -221,6 +236,7 @@
     (step [this stack pos]
        (let [ [[tstack tpos] f args] (extract-fn stack pos) ]
             [(insert s+ tstack tpos [(Value. (apply f args))]), 
+            ;;[(insert s+ tstack tpos [(Value. (invoke f args))]), 
                 tpos] ))
   Call
     (step [this stack pos] 
@@ -256,7 +272,7 @@
 
 
 (defn play
-"Boots again with initialized arguments for f and args."
+"Boots execution after preprocessing f and args."
 [ f & args ]
   ( let [ [stack pos] (apply newstack f args) ]
     (trampoline again stack pos)))
