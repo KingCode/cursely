@@ -36,7 +36,60 @@ Two or more mutually recursely functions can be defined at once:
 where each func spec is a name-args-body
 "
 )
-
+;; High Level Alg: adapt-1
+;; Input: a form F implementing a recursive function, a set S of registered functions names
+;; Output: a form Fprime implementing an adapted version of the function implemented by F
+;; 1) Parse-markup: perform PREWALK of F producing Ftemp
+;;   For each form in F
+;;   1-1) If a non-list and prefixed with a $, replace the form with a (hcall....) 
+;;   1-2) If a list with a $ prefixing the form in function position, "LF": 
+;;      1-2-1) strip away the $ from the form and 
+;;      1-2-2) transform LFtemp using (Transform LFtemp, S) 
+;;      1-2-3) output the resulting LFprime 
+;;  (for all other forms yield the input form unchanged)
+;; 
+;; 2) Transform:
+;;   2-0) Create local CArgs storing mappings of form -> count of args 
+;;      2-0-1) Perform PREWALK of LFtemp, and for each form LFtemp-sub
+;;          2-0-1-1) if a list, add LFtemp-sub -> list size - 1 
+;;          2-0-1-2) output LFtemp-sub unchanged
+;;   2-1) 
+    ;;   2-1-0) Initialize local atom with mappings: 
+    ;;              Started to: FALSE
+    ;;              LFout to: `(->) 
+    ;;   2-1-1) Perform POSTWALK of LFtemp: for each form LFTsub  in LFtemp
+        ;;   2-1-1-1) If it is a list it has one of the following in its function position:
+        ;;
+        ;;      2-1-1-1-1) the symbol for a function named in S, or (apply <name>...: 
+        ;;               in which case a LFsub-prime is ouput:
+        ;;                        if NOT Started, append to LFout the equivalent of
+        ;;                              (hcall [stack pos] <name> (get CArgs LFTsub) (rest LFTsub))
+        ;;                                          OR
+        ;;                                  (apply hcall .... (count (rest LFTsub)) (rest LFTsub))) ;; if (apply <name>
+        ;;                              and set Started to TRUE
+        ;;                        else, append to LFout 
+        ;;                              (hcall <name> (get CArgs LFTsub) (rest LFTsub))
+        ;;                                          OR (apply hcall .... (count (rest LFTsub))...  
+        ;;
+        ;;      2-1-1-1-2) the symbol for some other function :
+        ;;          2-1-1-1-2-1) if a postwalk search of LFTsub reveals a name in S anywhere within,
+        ;;            2-1-1-1-2-1-0) Initialize Fn: 
+        ;;                      if (first LFTsub) is a macro symbol, 
+        ;;                           wrap it in a function: set Fn to 
+        ;;                                    `#((first LFTsub) (for [ x (range (count (rest args)))] (-> 'x (str x) symbol)) 
+        ;;                      else set Fn to (first LFTsub).
+        ;;            2-1-1-1-2-1-1) a LFsub-prime is output:
+        ;;                        if NOT Started, append to LFout
+        ;;                              (hfn [stack pos] Fn (get CArgs LFTsub) (rest LFTsub))
+        ;;                                          OR (apply hfn ...   ;; if (apply <name> 
+        ;;                              and set Started to TRUE
+        ;;                        else, append to LFout
+        ;;                              (hfn  (get CArgs LFTsub) (rest LFTsub))
+        ;;                                          OR (apply hfn ... ;; if (apply <name>
+        ;;          2-1-1-1-2-2) else, leave unchanged
+        ;;      2-1-1-1-3) a special form or a literal, or some other non-function entity:
+        ;;          leave unchanged
+    ;;  2-1-2) output LFout
 
 (defn strip
 [ form ]
