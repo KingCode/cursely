@@ -50,7 +50,7 @@ where each func spec is a name-args-body
 ;; 
 ;; 2) Transform:
 ;;   2-0) Create local CArgs storing mappings of form -> count of args 
-;;      2-0-1) Perform PREWALK of LFtemp, and for each form LFtemp-sub
+;;      2-0-1) Perform POSTWALK of LFtemp, and for each form LFtemp-sub
 ;;          2-0-1-1) if a list, add LFtemp-sub -> list size - 1 
 ;;          2-0-1-2) output LFtemp-sub unchanged
 ;;   2-1) 
@@ -105,7 +105,8 @@ where each func spec is a name-args-body
 (defn hvalize
 [ form ]
   (let [ lit (strip-literal form) ]
-    `(hval [~'stack ~'pos] ~lit)))
+     (-> (str "(recursely.ccore/hval [stack pos] " lit ")") read-string)))
+ ;;   `(hval [~'stack ~'pos] ~lit)))
 
 
 (defn fn-form_OLD
@@ -144,21 +145,26 @@ where each func spec is a name-args-body
          args-str (->> (map #(str %) args) (interpose " ") (apply str))  ]
      (str "(" hsym " " s&p-arg " " func " " numargs " " args-str ")")))
 
+(declare transform)
 
 (defn parse
-"Strips markup from function positions in forms within body, storing transformed
- forms as keys in a may, and yields a tuple of the new markup in pos. 0, and the 
- map."
-[ body ]
-  (let [ regs (atom {})
-         update (fn [form value] (swap! regs #(merge % {form value}))) ]
-           [ (postwalk #(if (and (list? %) 
-                       (-> (first %) str (.startsWith "$")))
-                                (let [ stripped (strip %) ]
-                                            (update stripped {}) stripped) 
-                                                %) body)
-              ,@regs ]))
+"Parses marked up forms in body and replaces them with framework function calls,
+ using symbols in regs to recognize recurrent invocations in form.
 
+ Uses marker to indentify marked up literals and forms.
+"
+[ regs body marker ]
+    (postwalk #(cond (and (list? %) 
+                          (-> (first %) str (.startsWith marker)))
+                                    (let [ stripped (strip % marker) ]
+                                        (transform stripped))
+                      (and (not (list? %))
+                          (-> (str %) (.startsWith marker)))
+                                    (hvalize %) 
+                      :else %) body)) 
+                              
+
+;;         ;;update (fn [form value] (swap! regs #(merge % {form value}))) 
 
 #_(defn adapt-1
 "Yields an adapted form from a top-level marked up form; regs is a set of
