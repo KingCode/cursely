@@ -39,12 +39,12 @@ where each func spec is a name-args-body
 ;; High Level Alg: adapt-1
 ;; Input: a form F implementing a recursive function, a set S of registered functions names
 ;; Output: a form Fprime implementing an adapted version of the function implemented by F
-;; 1) Parse-markup: perform PREWALK of F producing Ftemp
+;; 1) Parse-markup: perform POSTWALK of F producing Ftemp
 ;;   For each form in F
-;;   1-1) If a non-list and prefixed with a $, replace the form with a (hcall....) 
+;;   1-1) If a non-list and prefixed with a $, replace the form with a (hval...) form
 ;;   1-2) If a list with a $ prefixing the form in function position, "LF": 
-;;      1-2-1) strip away the $ from the form and 
-;;      1-2-2) transform LFtemp using (Transform LFtemp, S) 
+;;      1-2-1) strip away the $ from the form into form LFtemp and 
+;;      1-2-2) transform into LFout using (Transform LFtemp, S) 
 ;;      1-2-3) output the resulting LFprime 
 ;;  (for all other forms yield the input form unchanged)
 ;; 
@@ -97,6 +97,36 @@ where each func spec is a name-args-body
       `( ~(symbol ftok) ~@(rest form))))
 
 
+(defn strip-literal
+[ form ]
+  (-> form str (.substring 1) symbol))
+
+
+(defn hvalize
+[ form ]
+  (let [ lit (strip-literal form) ]
+    `(hval [~'stack ~'pos] ~lit)))
+
+
+(defn fn-form
+"Yields a form consisting of fsym if not a macro, or a wrapper function otherwise.
+"
+[ fsym numargs ]
+  (if (macro? fsym) 
+        (let [ params (-> (for [x (range 1 (inc numargs))] 
+                            (-> "arg" (str x) symbol))) ]
+             `(fn [~@params] ('~fsym ~@params)))    ;;=> ((eval ff) arg1 arg2....)
+        fsym))
+
+
+(defn hoist-fn-form
+[ hsym s&p? fsym numargs args ]
+  (let [ func (fn-form fsym numargs) ]
+      (if s&p?
+        `('~hsym [~'stack ~'pos] ~func  ~numargs ~@args) 
+        `('~hsym ~func ~numargs ~@args))))
+
+
 (defn parse-markup
 "Strips markup from function positions in forms within body, storing transformed
  forms as keys in a may, and yields a tuple of the new markup in pos. 0, and the 
@@ -104,12 +134,14 @@ where each func spec is a name-args-body
 [ body ]
   (let [ regs (atom {})
          update (fn [form value] (swap! regs #(merge % {form value}))) ]
-           [ (prewalk #(if (and (list? %) 
+           [ (postwalk #(if (and (list? %) 
                        (-> (first %) str (.startsWith "$")))
                                 (let [ stripped (strip %) ]
                                             (update stripped {}) stripped) 
                                                 %) body)
               ,@regs ]))
+
+
 
 
 (defn hoist-form
