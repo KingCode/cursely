@@ -482,3 +482,56 @@
            acts (map #(apply play adapted-recursive-and %) samples) ]
       (is (= exps acts)))))           
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;;  Nested recursive calls mixed with 
+;;  literals as parameters
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn power-counter
+"A weird and extremely convoluted decrementing exponentiation calculator.
+ power-in-numbers1/2 are collections whose added sizes give the current power
+ to multiply factor by. If/when coll is empty, yields factor as the result.
+
+ The also convoluted (and recursive) counter fn is used to count the power-in-numbers
+ colls, and is invoked in nested parameter position invocations alongside the factor literal.
+
+ Intended to illustrate and test the use of hparam fn.
+"
+[ power-in-numbers1 factor power-in-numbers2 coll ]
+  (if (empty? coll) factor
+       (power-counter (rest power-in-numbers1) 
+                      (* factor (+ (counter power-in-numbers1)
+                                   (counter power-in-numbers2))) 
+                      (rest power-in-numbers2)  
+                      (rest coll))))
+
+(defn adapted-power-counter
+[ stack pos power-in-numbers1 factor power-in-numbers2 coll ]
+  (if (empty? coll) (hval [stack pos] factor)
+       (->  
+            (hparam [stack pos] (rest coll))
+            (hparam (rest power-in-numbers2))
+            (hcall adapted-counter 1 power-in-numbers2)
+            (hcall adapted-counter 1 power-in-numbers1)
+            (hfn + 2)
+            (hparam factor)
+            (hfn * 2)
+            (hparam (rest power-in-numbers1))
+            (hcall adapted-power-counter 4)
+            (rewind pos))))
+
+(deftest nested-mix-of-literals-and-fns-asparams-test
+  (testing "nested literals, funcs and recurrent calls should work as sibling parameters"
+      (let [ pcolls1 (map #(range %) (range 10))
+             pcolls2 (map #(range %) (range 19 30))
+             colls (map #(range %) (range 5)) 
+
+             exp (map #(power-counter %1 1 %2 %3) pcolls1 pcolls2 colls)
+             act (map #(play adapted-power-counter %1 1 %2 %3) pcolls1 pcolls2 colls) ]
+
+          (is (= exp act)))))
+
+           

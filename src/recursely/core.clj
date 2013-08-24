@@ -135,7 +135,7 @@ where each func spec is a name-args-body
         (str fsym)))
 
 
-(defn hoist-fn-form_OLD
+#_(defn hoist-fn-form_OLD
 [ hsym s&p? fsym numargs args ]
   (let [ func (fn-form fsym numargs) ]
       (if s&p?
@@ -144,7 +144,9 @@ where each func spec is a name-args-body
 
 
 (defn hoist-fn-form
-[ hsym s&p? fsym numargs args ]
+"Yields a string for a form hoisting fsym using hsym."
+;;TODO: use apply?
+[ hsym apply?  s&p? fsym numargs args ]
   (let [ func (fn-form fsym numargs) 
          s&p-arg (if s&p? "[stack pos]" "") 
          args-str (->> (map #(str %) args) (interpose " ") (apply str))  ]
@@ -158,7 +160,7 @@ where each func spec is a name-args-body
         (postwalk #(if (some regs %) (do (reset! found? true) %) %) form)
         @found?))
 
-(declare hcallize hfnize)
+(declare hcallize hfnize starts-with?)
 
 (defn transform
 "Converts a recursive form to an equivalent recursely adapted form, based on symbols in regs.
@@ -187,6 +189,11 @@ where each func spec is a name-args-body
                                 %))
             %))))
 
+
+(defn hcallize 
+[apply? s7p? fsym numargs args]
+  (read-string
+    (hoist-fn-form)))
 
 (defn starts-with?
 "Yields true if a form starts with symbol if a list, or is the symbol

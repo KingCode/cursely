@@ -92,6 +92,17 @@
 [ [stack pos] v ] 
   [(->> [(Value. v)] (insert s+ stack pos)), (inc pos) ])
 
+
+(defn hparam
+"Hoists a parameter value on the stack and yields the resulting [newstack newpos].
+ Equivalent to (hval s&p v), except that the returned cursor points past the added element
+ to allow for the next insertion. s&p is a [stack pos] tuple.
+"
+[ s&p  v ]
+ (let [ [stack pos] (hval s&p v)]
+    [stack pos]))
+
+
 (defn hoist-fn
 "See comments to hcall. Implements hcall/hfn with the proper type as per
  is-Call?.
