@@ -1,7 +1,8 @@
 (ns recursely.core
   (:use recursely.ccore 
         [clojure [walk]]
-        [clj-utils [core :only [thread-it macro-call funcvar macro? is-case]]]))
+        [clj-utils [core :only [thread-it macro-call funcvar macro? is-case]]
+                   [coll :only [in?]]]))
 
 (comment "(Not implemented) API which transforms a recursive function into a non-recursive one, e.g. 
     (defn KS [ coll, capacity ]
@@ -49,19 +50,22 @@ where each func spec is a name-args-body
 ;;  (for all other forms yield the input form unchanged)
 ;; 
 ;; 2) Transform:
+;;    INPUTS: a form list LFtemp and a set of symbols S
+;;    OUTPUT: a recursely adapted form
 ;;   2-0) Create local CArgs storing mappings of form -> count of args 
 ;;      2-0-1) Perform POSTWALK of LFtemp, and for each form LFtemp-sub
-;;          2-0-1-1) if a list, add LFtemp-sub -> list size - 1 
 ;;          2-0-1-2) output LFtemp-sub unchanged
 ;;   2-1) 
     ;;   2-1-0) Initialize local atom with mappings: 
     ;;              Started to: FALSE
     ;;              LFout to: `(->) 
     ;;   2-1-1) Perform POSTWALK of LFtemp: for each form LFTsub  in LFtemp
+;;          2-1-1-0) if a list, store its func pos arguments like so:
+;;              2-1-1-0-1) list size - 1; 
+;;                         if list starts with apply, use instead -> list size - 2
         ;;   2-1-1-1) If it is a list it has one of the following in its function position:
-        ;;
         ;;      2-1-1-1-1) the symbol for a function named in S, or (apply <name>...: 
-        ;;               in which case a LFsub-prime is ouput:
+        ;;               in which case a new form LFsub-prime is ouput:
         ;;                        if NOT Started, append to LFout the equivalent of
         ;;                              (hcall [stack pos] <name> (get CArgs LFTsub) (rest LFTsub))
         ;;                                          OR
@@ -90,6 +94,7 @@ where each func spec is a name-args-body
         ;;      2-1-1-1-3) a special form or a literal, or some other non-function entity:
         ;;          leave unchanged
     ;;  2-1-2) output LFout
+
 
 (defn strip
 [ form ]
@@ -145,7 +150,63 @@ where each func spec is a name-args-body
          args-str (->> (map #(str %) args) (interpose " ") (apply str))  ]
      (str "(" hsym " " s&p-arg " " func " " numargs " " args-str ")")))
 
-(declare transform)
+
+(defn of-interest?
+"Yields true if a symbol in regs is found as anywhere within form."
+[ regs form ]
+  (let [ found? (atom false) ]
+        (postwalk #(if (some regs %) (do (reset! found? true) %) %) form)
+        @found?))
+
+(declare hcallize hfnize)
+
+(defn transform
+"Converts a recursive form to an equivalent recursely adapted form, based on symbols in regs.
+"
+[ regs form ]
+  (let [ started? (atom false) ]
+      (postwalk 
+        #(if (list? %)
+                (cond 
+                    ;; nothing to do: return unchanged
+                    (not (of-interest? regs %)) %
+
+                    ;; transform as needed 
+                    (or (macro? %) (ifn? %))
+                        (let [ is-apply? (starts-with? % 'apply) 
+                               args (if is-apply? (rest (rest %)) (rest %)) 
+                               numargs (count args) 
+                               src-fn (if is-apply? (second %) (first %))
+                               adapter-fn (in? regs src-fn) hcallize hfnize ]
+                           (if (not @started?)
+                               (do (reset! started? true)
+                                   (adapter-fn is-apply? true src-fn numargs args))
+                               (adapter-fn is-apply? false src-fn numargs args)))
+
+                     :else (do (println "Warning: form not categorized (this may have no impact)")
+                                %))
+            %))))
+
+
+(defn starts-with?
+"Yields true if a form starts with symbol if a list, or is the symbol
+ otherwise.
+"
+[ form symbol ]
+   (if (list? form)
+        (-> (first form) (= symbol))
+        (= form symbol)))
+
+
+(defn starts-with-marker?
+"Yields true if a form has marker as the prefix to its first symbol if list,
+ or prefixes form otherwise.
+"
+[ form marker]
+   (if (list? form)
+        (-> (first form) str (.startsWith marker))
+        (-> (str form) (.startsWith marker))))
+
 
 (defn parse
 "Parses marked up forms in body and replaces them with framework function calls,
@@ -154,17 +215,13 @@ where each func spec is a name-args-body
  Uses marker to indentify marked up literals and forms.
 "
 [ regs body marker ]
-    (postwalk #(cond (and (list? %) 
-                          (-> (first %) str (.startsWith marker)))
+    (postwalk #(cond (and (list? %) (starts-with-marker? % marker)) 
                                     (let [ stripped (strip % marker) ]
                                         (transform stripped))
-                      (and (not (list? %))
-                          (-> (str %) (.startsWith marker)))
+                      (starts-with-marker? %) 
                                     (hvalize %) 
                       :else %) body)) 
                               
-
-;;         ;;update (fn [form value] (swap! regs #(merge % {form value}))) 
 
 #_(defn adapt-1
 "Yields an adapted form from a top-level marked up form; regs is a set of
