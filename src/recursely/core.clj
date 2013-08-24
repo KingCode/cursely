@@ -108,7 +108,7 @@ where each func spec is a name-args-body
     `(hval [~'stack ~'pos] ~lit)))
 
 
-(defn fn-form
+(defn fn-form_OLD
 "Yields a form consisting of fsym if not a macro, or a wrapper function otherwise.
 "
 [ fsym numargs ]
@@ -119,7 +119,17 @@ where each func spec is a name-args-body
         fsym))
 
 
-(defn hoist-fn-form
+(defn fn-form
+[ fsym numargs ]
+  (if (macro? fsym)
+        (let [ params (->> (-> (for [x (range 1 (inc numargs))]
+                            (-> "arg" (str x))))
+                           (interpose " ") (apply str)) ]
+            (str "(fn [" params "] (" (str fsym) " " params "))"))
+        (str fsym)))
+
+
+(defn hoist-fn-form_OLD
 [ hsym s&p? fsym numargs args ]
   (let [ func (fn-form fsym numargs) ]
       (if s&p?
@@ -127,7 +137,15 @@ where each func spec is a name-args-body
         `('~hsym ~func ~numargs ~@args))))
 
 
-(defn parse-markup
+(defn hoist-fn-form
+[ hsym s&p? fsym numargs args ]
+  (let [ func (fn-form fsym numargs) 
+         s&p-arg (if s&p? "[stack pos]" "") 
+         args-str (->> (map #(str %) args) (interpose " ") (apply str))  ]
+     (str "(" hsym " " s&p-arg " " func " " numargs " " args-str ")")))
+
+
+(defn parse
 "Strips markup from function positions in forms within body, storing transformed
  forms as keys in a may, and yields a tuple of the new markup in pos. 0, and the 
  map."
@@ -140,16 +158,6 @@ where each func spec is a name-args-body
                                             (update stripped {}) stripped) 
                                                 %) body)
               ,@regs ]))
-
-
-
-
-(defn hoist-form
-"Hoists a function call onto the stack, either as a recursely function call if found in regs,
- or a regular function call otherwise.
-"
-[ regs form ])
-
 
 
 #_(defn adapt-1
