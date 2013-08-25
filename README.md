@@ -85,7 +85,7 @@ Remarks
 
 TODOs: 
 
-i) DSL API currently working on recursely.core 
+i) DSL API (currently working on recursely.core) 
 
 ii) add configurable memoization 
 
