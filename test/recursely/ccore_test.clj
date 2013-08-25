@@ -100,9 +100,9 @@
             [tested4 pos4] (-> (hval [stack 3] 10)
                                (hfn + 2 11))
           ]
-      (is (same-state [tested pos] [[1 2 (Value. 11) (Value. 10) (Fn. + 2) 3 4 5] 5]))
+      (is (same-state [tested pos] [[1 2 (Value. 10) (Value. 11) (Fn. + 2) 3 4 5] 5]))
       (is (same-state [tested2 pos2] [[1 2 3 4 5 (Fn. max 2)] 6] ))
-      (is (same-state [tested3 pos3] [[(Value. 2) (Value. 1) (Fn. + 3)] 3]))
+      (is (same-state [tested3 pos3] [[(Value. 1) (Value. 2) (Fn. + 3)] 3]))
       
       ;; chained hfns 
       (is (same-state [tested4 pos4] [[1 2 3 (Value. 10) (Value. 11) (Fn. + 2) 4 5] 6]))
@@ -113,7 +113,7 @@
 
 (deftest newstack-test
   (testing "newstack should yield a [ Value1, Value2,...Call] stack pointing at the last element"
-     (is (same-state [[(Value. 1) (Value. 2) (Call. + 2)] 2] (newstack + 2 1)))))
+     (is (same-state [[(Value. 1) (Value. 2) (Call. + 2)] 2] (newstack + 1 2)))))
 
 
 (deftest pop-call-test
@@ -155,7 +155,7 @@
     (let [ 
             [stack pos] [[1 2 3 (Value. 11) (Value. 10) (Fn. + 2) 4 5] 5] 
             [stack1 pos1] [[(Value. 1000) (Fn. even? 1) 1 2 3 4 5] 1]
-            [stack2 pos2] [[1 2 3 4 5 (Value. :c) (Value. :b) (Value. :a) (Fn. #(vector %1 %2 %3) 3)] 8]
+            [stack2 pos2] [[1 2 3 4 5 (Value. :a) (Value. :b) (Value. :c) (Fn. #(vector %1 %2 %3) 3)] 8]
             [stack3 pos3] [[(Value. 3) (Value. 2) (Fn. * 2)] 2]
         ]
     
@@ -202,9 +202,13 @@
 [stack pos coll] 
     (if (empty? coll) 
         (hval [stack pos] 0)
-        (-> (hcall [stack pos] adapted-counter 1 (rest coll))
+        #_(-> (hcall [stack pos] adapted-counter 1 (rest coll))
             (hfn + 2 1)
-            (rewind pos))))
+            (rewind pos))
+          (-> (hparam [stack pos] 1)
+              (hcall adapted-counter 1 (rest coll))
+              (hfn + 2)
+              (rewind pos))))
 
 
 #_(deftest play-test-bootup
@@ -272,33 +276,37 @@
 (declare hat)
 (defn cat 
 ([n acc]
+(do #_(println "CAT: n=" n ", acc=" acc)
   (if (zero? n) acc
     (let [ term (if (= 0 (rem n 2)) n 0) ]
-        (hat (dec n) (+ term acc)))))
+        (hat (dec n) (+ term acc))))))
 ([n] (cat n 0)))
 
 (defn hat 
 ([n acc]
+(do #_(println "HAT: n=" n ", acc=" acc)
   (if (zero? n) acc
     (let [ term (if (= 0 (rem n 3)) n 0) ]
-        (cat (dec n) (+ term acc)))))
+        (cat (dec n) (+ term acc))))))
 ([n] (hat n 0)))
 
 (declare adapted-hat)
 
 (defn adapted-cat 
 ([ stack pos n acc]
+(do #_(println "ADAPTED-CAT: n=" n ", acc=" acc)
     (if (zero? n) (hval [stack pos] acc)
       (let [ term (if (= 0 (rem n 2)) n 0) ]
-        (-> (hcall [stack pos] adapted-hat 2 (dec n) (+ term acc)) (rewind pos)))))
+        (-> (hcall [stack pos] adapted-hat 2 (dec n) (+ term acc)) (rewind pos))))))
 ([ stack pos n]
   (adapted-cat stack pos n 0)))
 
 (defn adapted-hat
 ([ stack pos n acc]
+(do #_(println "ADAPTED-HAT: n=" n ", acc=" acc)
   (if (zero? n) (hval [stack pos] acc)
      (let [ term (if (= 0 (rem n 3)) n 0) ]
-        (-> (hcall [stack pos] adapted-cat 2 (dec n) (+ term acc)) (rewind pos)))))
+        (-> (hcall [stack pos] adapted-cat 2 (dec n) (+ term acc)) (rewind pos))))))
 ([ stack pos n ]
   (adapted-hat stack pos n 0)))
 
@@ -346,18 +354,31 @@
 (defn adapted-male
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 0)
-    (-> (hcall [stack pos] adapted-male 1 (dec n))
+    #_(-> (hcall [stack pos] adapted-male 1 (dec n))
         (hcall adapted-female 1)
         (hfn - 2 n)
-        (rewind pos))))
+        (rewind pos))
+
+      (-> (hparam [stack pos] n)
+          (hcall adapted-male 1 (dec n))
+          (hcall adapted-female 1)
+          (hfn - 2)
+          (rewind pos))))
 
 (defn adapted-female
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 1)
-    (-> (hcall [stack pos] adapted-female 1 (dec n))
+    #_(-> (hcall [stack pos] adapted-female 1 (dec n))
         (hcall adapted-male 1)
         (hfn - 2 n)
-        (rewind pos))))
+        (rewind pos))
+
+    (-> (hparam [stack pos] n)
+        (hcall adapted-female 1 (dec n))
+        (hcall adapted-male 1)
+        (hfn - 2)
+        (rewind pos)
+        )))
 
 
 (deftest two-mutually-recursive-nested-test
@@ -408,11 +429,20 @@
   (if (empty? coll) (hval [stack pos] 0)
     (let [ [c v] (-> (first coll) (#(vector (cost %) (value %)))) 
            tail (rest coll) ]
-        (if (-> c (> capacity))
+        #_(if (-> c (> capacity))
             (-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
             (-> (hcall [stack pos] adapted-KS 2 tail (- capacity c))
                 (hfn + 2 v)
                 (hcall adapted-KS 2 tail capacity)
+                (hfn max 2)
+                (rewind pos)))
+                
+         (if (-> c (> capacity))
+            (-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
+            (-> (hcall [stack pos] adapted-KS 2 tail capacity) 
+                (hparam v)
+                (hcall adapted-KS 2 tail (- capacity c))
+                (hfn + 2)
                 (hfn max 2)
                 (rewind pos))))))
 
@@ -491,7 +521,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn power-counter
-"A weird and extremely convoluted decrementing exponentiation calculator.
+"A degenerate and convoluted decrementing exponentiation calculator.
  power-in-numbers1/2 are collections whose added sizes give the current power
  to multiply factor by. If/when coll is empty, yields factor as the result.
 
@@ -511,7 +541,7 @@
 (defn adapted-power-counter
 [ stack pos power-in-numbers1 factor power-in-numbers2 coll ]
   (if (empty? coll) (hval [stack pos] factor)
-       (->  
+       #_(->  
             (hparam [stack pos] (rest coll))
             (hparam (rest power-in-numbers2))
             (hcall adapted-counter 1 power-in-numbers2)
@@ -520,6 +550,18 @@
             (hparam factor)
             (hfn * 2)
             (hparam (rest power-in-numbers1))
+            (hcall adapted-power-counter 4)
+            (rewind pos))
+            
+        (-> 
+            (hparam [stack pos] (rest power-in-numbers1))
+            (hparam factor)
+            (hcall adapted-counter 1 power-in-numbers1)
+            (hcall adapted-counter 1 power-in-numbers2)
+            (hfn + 2)
+            (hfn * 2)
+            (hparam (rest power-in-numbers2))
+            (hparam (rest coll))
             (hcall adapted-power-counter 4)
             (rewind pos))))
 

@@ -119,9 +119,16 @@
         ;; stack with f and args inserted
 
         (cu/thread-it
-         object
-         (apply conj [] it vals) ;; wrapping re: protocols don't like variadic args
-         (insert-b s+ stack pos it)), 
+         ;; object
+         ;; (apply conj [] it vals) ;; wrapping re: protocols don't like variadic args
+         ;; SWITCHED it and vals - see below
+            (conj (vec vals) object)
+
+         ;;(insert-b s+ stack pos it)), 
+         ;; CHANGED PARAMETER ORDERING: FORWARD, so that:
+         ;;  1) evaluation order is respected vs. natural recursion (left to right)
+         ;;  2) DSL implementation can be simple (using pre-order traversal) 
+         (insert s+ stack pos it)), 
 
     ;; increment pos by the number of inserted elements
     ;; (add one for the Call frame)
@@ -226,7 +233,9 @@
   (let [ frame (nth stack pos)
          f (.fn frame)  
          numargs (.numargs frame)
-         args (stp/peek-rnb s+ stack (dec pos) numargs)
+         ;;args (stp/peek-rnb s+ stack (dec pos) numargs)
+         ;;SWITCHED PARAMS ORDER, see hoist-fn also
+         args (-> (stp/peek-rnb s+ stack (dec pos) numargs) reverse vec)
          ready-args? (-> (coll/find-index #(not (= Value (class %))) args) nil?)
       ]
 
@@ -295,8 +304,11 @@
 "
 [ f & args]
   (let [ numargs (count args) ]
-      [ (-> (map #(Value. %) args)
-                    reverse
+      [ (-> (map #(Value. %) args) 
+ 
+ ;;         SWITCHED PARAMS order, see hoist-fn, step functions
+ ;;                   reverse
+
                     vec
                     (conj (Call. f numargs)))
         , numargs ]))
