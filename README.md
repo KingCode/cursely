@@ -83,7 +83,9 @@ Remarks
    same in both - this is a limitation, unlike native recursion where recurrent invocations represent a value and therefore
    can be reused anywhere.
 
-TODO: 1) DSL API currently working on recursely.core 
-      2) add configurable memoization 
-      3) use transient/native stack implementation, or perhaps a faster data structure (tree? skip list?)
-      3) configurable debugging/audit/exception facility.
+TODOs: 
+=====
+i) DSL API currently working on recursely.core 
+ii) add configurable memoization 
+iii) use transient/native stack implementation, or perhaps a faster data structure (tree? skip list?)
+iv) configurable debugging/audit/exception facility.
