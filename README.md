@@ -84,8 +84,10 @@ Remarks
    can be reused anywhere.
 
 TODOs: 
-=====
 i) DSL API currently working on recursely.core 
+
 ii) add configurable memoization 
+
 iii) use transient/native stack implementation, or perhaps a faster data structure (tree? skip list?)
+
 iv) configurable debugging/audit/exception facility.
