@@ -4,6 +4,8 @@
         [clj-utils [core :only [thread-it macro-call funcvar macro? is-case]]
                    [coll :only [in?]]]))
 
+(def NSPFX "recursely.ccore/")
+
 (comment "(Not implemented) API which transforms a recursive function into a non-recursive one, e.g. 
     (defn KS [ coll, capacity ]
       (if (empty? coll) 0
@@ -33,7 +35,7 @@ but does not consume the stack.
 
 Two or more mutually recursely functions can be defined at once:
 
-    (defrecursely func-specs*)
+(defrecursely func-specs*)
 where each func spec is a name-args-body
 "
 )
@@ -49,52 +51,24 @@ where each func spec is a name-args-body
 ;;      1-2-3) output the resulting LFprime 
 ;;  (for all other forms yield the input form unchanged)
 ;; 
-;; 2) Transform:
-;;    INPUTS: a form list LFtemp and a set of symbols S
-;;    OUTPUT: a recursely adapted form
-;;   2-0) Create local CArgs storing mappings of form -> count of args 
-;;      2-0-1) Perform POSTWALK of LFtemp, and for each form LFtemp-sub
-;;          2-0-1-2) output LFtemp-sub unchanged
-;;   2-1) 
-    ;;   2-1-0) Initialize local atom with mappings: 
-    ;;              Started to: FALSE
-    ;;              LFout to: `(->) 
-    ;;   2-1-1) Perform POSTWALK of LFtemp: for each form LFTsub  in LFtemp
-;;          2-1-1-0) if a list, store its func pos arguments like so:
-;;              2-1-1-0-1) list size - 1; 
-;;                         if list starts with apply, use instead -> list size - 2
-        ;;   2-1-1-1) If it is a list it has one of the following in its function position:
-        ;;      2-1-1-1-1) the symbol for a function named in S, or (apply <name>...: 
-        ;;               in which case a new form LFsub-prime is ouput:
-        ;;                        if NOT Started, append to LFout the equivalent of
-        ;;                              (hcall [stack pos] <name> (get CArgs LFTsub) (rest LFTsub))
-        ;;                                          OR
-        ;;                                  (apply hcall .... (count (rest LFTsub)) (rest LFTsub))) ;; if (apply <name>
-        ;;                              and set Started to TRUE
-        ;;                        else, append to LFout 
-        ;;                              (hcall <name> (get CArgs LFTsub) (rest LFTsub))
-        ;;                                          OR (apply hcall .... (count (rest LFTsub))...  
-        ;;
-        ;;      2-1-1-1-2) the symbol for some other function :
-        ;;          2-1-1-1-2-1) if a postwalk search of LFTsub reveals a name in S anywhere within,
-        ;;            2-1-1-1-2-1-0) Initialize Fn: 
-        ;;                      if (first LFTsub) is a macro symbol, 
-        ;;                           wrap it in a function: set Fn to 
-        ;;                                    `#((first LFTsub) (for [ x (range (count (rest args)))] (-> 'x (str x) symbol)) 
-        ;;                      else set Fn to (first LFTsub).
-        ;;            2-1-1-1-2-1-1) a LFsub-prime is output:
-        ;;                        if NOT Started, append to LFout
-        ;;                              (hfn [stack pos] Fn (get CArgs LFTsub) (rest LFTsub))
-        ;;                                          OR (apply hfn ...   ;; if (apply <name> 
-        ;;                              and set Started to TRUE
-        ;;                        else, append to LFout
-        ;;                              (hfn  (get CArgs LFTsub) (rest LFTsub))
-        ;;                                          OR (apply hfn ... ;; if (apply <name>
-        ;;          2-1-1-1-2-2) else, leave unchanged
-        ;;      2-1-1-1-3) a special form or a literal, or some other non-function entity:
-        ;;          leave unchanged
-    ;;  2-1-2) output LFout
-
+;;      Transform 
+;;      Input: form F, a list, requiring conversion; set S; atom STARTED; string BUFFER 
+;;      
+;;          - if a postwalk on F does not reveal any symbol in S:
+;;                    (hparam F) * OR, if this is the first, do instead (-> (hparam [stack pos] F-SUB)
+;;                                      and set STARTED to true
+;;
+;;          - else, its head is a fn or macro call: 
+;;                    -- perform Transform-rest on (rest F): 
+;;                    -- emit (hfn <head fn/macro> (count F)) * see above 
+;;                                                            ** if Fin S, use (hcall ...) instead
+;;                             
+;;       Transform-rest
+;;       Input: form F; set S; atom STARTED; string BUFFER
+;;       For each form f' of F:
+;;              - if a list, invoke (Transform f' S STARTED)
+;;              - else, emit (hparam ....)
+;;              
 
 (defn strip
 [ form ]
@@ -107,25 +81,14 @@ where each func spec is a name-args-body
   (-> form str (.substring 1) symbol))
 
 
-(defn hvalize
+(defn hval-form
 [ form ]
   (let [ lit (strip-literal form) ]
      (-> (str "(recursely.ccore/hval [stack pos] " lit ")") read-string)))
  ;;   `(hval [~'stack ~'pos] ~lit)))
 
 
-(defn fn-form_OLD
-"Yields a form consisting of fsym if not a macro, or a wrapper function otherwise.
-"
-[ fsym numargs ]
-  (if (macro? fsym) 
-        (let [ params (-> (for [x (range 1 (inc numargs))] 
-                            (-> "arg" (str x) symbol))) ]
-             `(fn [~@params] ('~fsym ~@params)))    ;;=> ((eval ff) arg1 arg2....)
-        fsym))
-
-
-(defn fn-form
+(defn str-fn-form
 [ fsym numargs ]
   (if (macro? fsym)
         (let [ params (->> (-> (for [x (range 1 (inc numargs))]
@@ -135,24 +98,6 @@ where each func spec is a name-args-body
         (str fsym)))
 
 
-#_(defn hoist-fn-form_OLD
-[ hsym s&p? fsym numargs args ]
-  (let [ func (fn-form fsym numargs) ]
-      (if s&p?
-        `('~hsym [~'stack ~'pos] ~func  ~numargs ~@args) 
-        `('~hsym ~func ~numargs ~@args))))
-
-
-(defn hoist-fn-form
-"Yields a string for a form hoisting fsym using hsym."
-;;TODO: use apply?
-[ hsym apply?  s&p? fsym numargs args ]
-  (let [ func (fn-form fsym numargs) 
-         s&p-arg (if s&p? "[stack pos]" "") 
-         args-str (->> (map #(str %) args) (interpose " ") (apply str))  ]
-     (str "(" hsym " " s&p-arg " " func " " numargs " " args-str ")")))
-
-
 (defn of-interest?
 "Yields true if a symbol in regs is found as anywhere within form."
 [ regs form ]
@@ -160,40 +105,104 @@ where each func spec is a name-args-body
         (postwalk #(if (some regs %) (do (reset! found? true) %) %) form)
         @found?))
 
-(declare hcallize hfnize starts-with?)
+(defn not-started?-and-set
+"Yields the value of started? atom. If false, started?'s value is set to true.
+"
+[ started?-atom ]
+(let [ started?  @started?-atom ]
+  (if (not started?)
+    (reset! started? true))
+  started?))
+
+(declare is-apply?)
+
+(defn emit-invoke
+"Yields a hcall or hfn call. If the target fn symbol is in regs, the call is an hcall, else it is an hfn.
+"
+[ form regs started?-atom ]
+(let [ emit-state? (not-started?-and-set started?-atom) 
+       apply? (is-apply? form)
+       fn-symbol (if apply? (second form) (first form)) 
+       siz (count form)
+       numargs (if apply? (- siz 2) (dec siz)) ] 
+(-> (str "(")
+    (str (if apply? "apply " ""))                ;;space
+    (str NSPFX)
+    (str (if (in? regs fn-symbol) "hcall" "hfn"))
+    (str (if emit-state? " [stack pos] " " "))  ;;space
+    (str-fn-form fn-symbol numargs)
+    (str " ")                                   ;;space
+    (str numargs)
+    (str ")"))))
+
+
+(defn emit-param
+[ sym started?-atom ]
+(let [ emit-state? (not-started?-and-set started?-atom) ]
+   (-> (str "(" NSPFX "hparam "))
+       (str (if emit-state? "[stack pos] " ""))
+       (str sym ")")))
+   
+
+(defn emit-rewind
+[ pos ]
+(str "(rewind " pos ")"))
+
+(defn emit-close
+[]
+(str ")"))
+
+(defn emit-open
+[]
+(str "(->"))
+
+(declare transform-str transform-rest-str is-apply? starts-with?)
 
 (defn transform
-"Converts a recursive form to an equivalent recursely adapted form, based on symbols in regs.
+"Yields a form which invokes a sequence of hparam/hfn/hcall invocations according 
+ to in-form's structure and regs contents.
+ "
+ [ in-form regs ]
+   (eval (transform-str in-form regs)))
+
+
+(defn transform-str
+"Yields a serialized form which invokes a sequence of hparam, hfn/call invocations 
+ for each element from in-form, based on the element's structure and position, symbols in regs, 
+ and whether @started? is true; the contents of buffer is prefixed to the output.
 "
-[ regs form ]
-  (let [ started? (atom false) ]
-      (postwalk 
-        #(if (list? %)
-                (cond 
-                    ;; nothing to do: return unchanged
-                    (not (of-interest? regs %)) %
+([ in-form regs started?]
+  (-> 
+      (str (if (not (of-interest? in-form regs))
+                        ;; no nested forms requiring special treatment:
+                        ;; emit param with form as is
+                        (emit-param in-form started?)
 
-                    ;; transform as needed 
-                    (or (macro? %) (ifn? %))
-                        (let [ is-apply? (starts-with? % 'apply) 
-                               args (if is-apply? (rest (rest %)) (rest %)) 
-                               numargs (count args) 
-                               src-fn (if is-apply? (second %) (first %))
-                               adapter-fn (in? regs src-fn) hcallize hfnize ]
-                           (if (not @started?)
-                               (do (reset! started? true)
-                                   (adapter-fn is-apply? true src-fn numargs args))
-                               (adapter-fn is-apply? false src-fn numargs args)))
-
-                     :else (do (println "Warning: form not categorized (this may have no impact)")
-                                %))
-            %))))
+                        ;; nested forms having registered functions:
+                        ;; handle them first as params to this function symbol,
+                        ;; then hoist fn call itself.
+                        (-> (str (transform-rest-str (rest in-form) regs started?))
+                            (str (emit-invoke in-form regs started?)))))))
+([ in-form regs ]
+  (str (emit-open) 
+       (transform in-form regs (atom false))
+       (emit-rewind)
+       (emit-close))))
 
 
-(defn hcallize 
-[apply? s7p? fsym numargs args]
-  (read-string
-    (hoist-fn-form)))
+(defn transform-rest-str
+"Same as transform, except that elements in function position are treated like any other.
+"
+[ in-form regs started? ]
+   (->> (map #(if (list? %) (transform-str % regs started?)
+                            (emit-param % started?)) in-form)
+        (reduce #(str %1 %2))))
+
+
+(defn is-apply?
+[ form ]
+(starts-with? form 'apply))
+
 
 (defn starts-with?
 "Yields true if a form starts with symbol if a list, or is the symbol
@@ -226,41 +235,9 @@ where each func spec is a name-args-body
                                     (let [ stripped (strip % marker) ]
                                         (transform stripped))
                       (starts-with-marker? %) 
-                                    (hvalize %) 
+                                    (hval-form %) 
                       :else %) body)) 
                               
-
-#_(defn adapt-1
-"Yields an adapted form from a top-level marked up form; regs is a set of
- registered function symbols"
-[ regs form ]
-  (if (list? form)
-      (condp is (first form)
-            special-symbol? (hoist-special regs form)
-            macro? (hoist-macro regs form)
-            ifn? (hoist-func regs form)
-            :else form)
-       form))
-
-
-
-(defn- parsefor-numargs
-"Yields a map of each list form in body with the number of args for its var 
- in function position."
-[ regs body ]
-(let [ form2mumargs (atom {}) ]
-  #_(prewalk #(do (if (list? %) (swap! form2numargs 
-                                    (fn [x] (assoc x % (dec (count %)))))) %)
-                                                                            body)
-  (postwalk (fn [ x ] (if (list? x) 
-                          (condp instance? (first x)))))))
-  
-
-
-(defn- adapt-1
-[ regs name args-body ]
-    (let [ body (drop 1 args-body) ]))
-       
 
 ;;args, body copied from clojure.core_deftypes
 (defn- parse-specs
@@ -281,13 +258,6 @@ where each func spec is a name-args-body
                              `(adapt registered ~name ~@arities ))
                                            impls))))
 
-
-(defn hoist-spec
-"Yields a map of symbols from form to maps of {:type <hfn, hcall, nil> :numargs <positive int> :val}
- for all symbols in form requiring hoisting by recursely.
- "
- [ form ]
- )
 
  (defn register-funcs
  "Yields a set of function symbols from func-specs with each func spec is a (funcname, ([& args] body)*)

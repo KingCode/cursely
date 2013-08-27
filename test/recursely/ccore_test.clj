@@ -439,14 +439,45 @@
                 
          (if (-> c (> capacity))
             (-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
-            (-> (hcall [stack pos] adapted-KS 2 tail capacity) 
+            #_(-> (hcall [stack pos] adapted-KS 2 tail capacity) 
                 (hparam v)
                 (hcall adapted-KS 2 tail (- capacity c))
                 (hfn + 2)
                 (hfn max 2)
-                (rewind pos))))))
+                (rewind pos))
+                
+            (-> (hparam [stack pos] tail)
+                (hparam capacity)
+                (hcall adapted-KS 2)
+                (hparam v)
+                (hparam tail)
+                (hparam (- capacity c))
+                (hcall adapted-KS 2)
+                (hfn + 2)
+                (hfn max 2)
+                (rewind pos))
+                
+                
+                ))))
 
-
+(comment "
+Walked: max
+Walked: KS
+Walked: tail
+Walked: capacity
+Walked: (KS tail capacity)
+Walked: +
+Walked: v
+Walked: KS
+Walked: tail
+Walked: -
+Walked: capacity
+Walked: c
+Walked: (- capacity c)
+Walked: (KS tail (- capacity c))
+Walked: (+ v (KS tail (- capacity c)))
+Walked: (max (KS tail capacity) (+ v (KS tail (- capacity c))))
+")
 (deftest single-mutually-recursive-nested-knapsack-test
   (testing "Adaptation of knapsack 1/0 should yield the same value as its counterpart"
     (let [
