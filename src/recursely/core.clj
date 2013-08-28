@@ -102,7 +102,7 @@ where each func spec is a name-args-body
 "Yields true if a symbol in regs is found as anywhere within form."
 [ regs form ]
   (let [ found? (atom false) ]
-        (postwalk #(if (some regs %) (do (reset! found? true) %) %) form)
+        (postwalk #(if (in? regs %) (do (reset! found? true) %) %) form)
         @found?))
 
 (defn not-started?-and-set
@@ -111,7 +111,7 @@ where each func spec is a name-args-body
 [ started?-atom ]
 (let [ started?  @started?-atom ]
   (if (not started?)
-    (reset! started? true))
+    (reset! started?-atom true))
   started?))
 
 (declare is-apply?)
@@ -145,8 +145,8 @@ where each func spec is a name-args-body
    
 
 (defn emit-rewind
-[ pos ]
-(str "(rewind " pos ")"))
+[]
+(str "(rewind pos)"))
 
 (defn emit-close
 []
@@ -167,7 +167,8 @@ where each func spec is a name-args-body
 
 
 (defn transform-str
-"Yields a serialized form which invokes a sequence of hparam, hfn/call invocations 
+"in-form is a deserialized form, regs a seq of symbols, and started? is an atom referencing a boolean.
+ Yields a serialized form which invokes a sequence of hparam, hfn/call invocations 
  for each element from in-form, based on the element's structure and position, symbols in regs, 
  and whether @started? is true; the contents of buffer is prefixed to the output.
 "
@@ -185,7 +186,7 @@ where each func spec is a name-args-body
                             (str (emit-invoke in-form regs started?)))))))
 ([ in-form regs ]
   (str (emit-open) 
-       (transform in-form regs (atom false))
+       (transform-str in-form regs (atom false))
        (emit-rewind)
        (emit-close))))
 
