@@ -100,12 +100,12 @@ where each func spec is a name-args-body
 
 (defn of-interest?
 "Yields true if a symbol in regs is found as anywhere within form."
-[ regs form ]
+[ form regs ]
   (let [ found? (atom false) ]
         (postwalk #(if (in? regs %) (do (reset! found? true) %) %) form)
         @found?))
 
-(defn not-started?-and-set
+(defn started?-and-set
 "Yields the value of started? atom. If false, started?'s value is set to true.
 "
 [ started?-atom ]
@@ -120,7 +120,7 @@ where each func spec is a name-args-body
 "Yields a hcall or hfn call. If the target fn symbol is in regs, the call is an hcall, else it is an hfn.
 "
 [ form regs started?-atom ]
-(let [ emit-state? (not-started?-and-set started?-atom) 
+(let [ emit-state? (not (started?-and-set started?-atom)) 
        apply? (is-apply? form)
        fn-symbol (if apply? (second form) (first form)) 
        siz (count form)
@@ -130,7 +130,7 @@ where each func spec is a name-args-body
     (str NSPFX)
     (str (if (in? regs fn-symbol) "hcall" "hfn"))
     (str (if emit-state? " [stack pos] " " "))  ;;space
-    (str-fn-form fn-symbol numargs)
+    (str (str-fn-form fn-symbol numargs))
     (str " ")                                   ;;space
     (str numargs)
     (str ")"))))
@@ -138,10 +138,10 @@ where each func spec is a name-args-body
 
 (defn emit-param
 [ sym started?-atom ]
-(let [ emit-state? (not-started?-and-set started?-atom) ]
-   (-> (str "(" NSPFX "hparam "))
+(let [ emit-state? (not (started?-and-set started?-atom)) ]
+   (-> (str "(" NSPFX "hparam ")
        (str (if emit-state? "[stack pos] " ""))
-       (str sym ")")))
+       (str sym ")"))))
    
 
 (defn emit-rewind
@@ -173,17 +173,19 @@ where each func spec is a name-args-body
  and whether @started? is true; the contents of buffer is prefixed to the output.
 "
 ([ in-form regs started?]
+(do (println "Transform-str: in-form=>'" in-form "<, REGS=" regs) 
   (-> 
       (str (if (not (of-interest? in-form regs))
                         ;; no nested forms requiring special treatment:
                         ;; emit param with form as is
-                        (emit-param in-form started?)
+                        (do (println "transform-str: found nothing")
+                        (emit-param in-form started?))
 
                         ;; nested forms having registered functions:
                         ;; handle them first as params to this function symbol,
                         ;; then hoist fn call itself.
                         (-> (str (transform-rest-str (rest in-form) regs started?))
-                            (str (emit-invoke in-form regs started?)))))))
+                            (str (emit-invoke in-form regs started?))))))))
 ([ in-form regs ]
   (str (emit-open) 
        (transform-str in-form regs (atom false))
@@ -195,9 +197,10 @@ where each func spec is a name-args-body
 "Same as transform, except that elements in function position are treated like any other.
 "
 [ in-form regs started? ]
-   (->> (map #(if (list? %) (transform-str % regs started?)
-                            (emit-param % started?)) in-form)
-        (reduce #(str %1 %2))))
+(do (println "Transform-REST-str: in-form=>'" in-form "<") 
+   (->> (map #(do (println "MAP LOOP: " %) (if (list? %) (transform-str % regs started?)
+                            (emit-param % started?))) in-form)
+        (reduce #(str %1 %2)))))
 
 
 (defn is-apply?

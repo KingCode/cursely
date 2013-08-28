@@ -445,7 +445,13 @@
                 (hfn + 2)
                 (hfn max 2)
                 (rewind pos))
-                
+               
+               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+               ;;                                                   ;;
+               ;;  below is what the macro transform should yield:  ;; 
+               ;;                                                   ;;
+               ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
             (-> (hparam [stack pos] tail)
                 (hparam capacity)
                 (hcall adapted-KS 2)
