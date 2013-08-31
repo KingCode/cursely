@@ -202,20 +202,11 @@
 [stack pos coll] 
     (if (empty? coll) 
         (hval [stack pos] 0)
-        #_(-> (hcall [stack pos] adapted-counter 1 (rest coll))
-            (hfn + 2 1)
-            (rewind pos))
           (-> (hparam [stack pos] 1)
               (hcall adapted-counter 1 (rest coll))
               (hfn + 2)
               (rewind pos))))
 
-
-#_(deftest play-test-bootup
-  (testing "Should deliver correct setup to function 'again'"
-    (let [ client adapted-counter
-           stack (newstack client [:a :b :c]) ]
-           )))
     
 (deftest play-test
   (testing "Should hoist an adapted nested recursive function and play it for the correct result"
@@ -251,7 +242,7 @@
                     (rewind pos))))
         
 (if DEBUG-play-test-basic (do
-(h/add-hook #'adapted-recursive-odd? #'debug-info)
+(h/add-hook #'adapted-recursive-odd? #'debug-info-1)
 ))
 
 (deftest play-test-basic
@@ -354,11 +345,6 @@
 (defn adapted-male
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 0)
-    #_(-> (hcall [stack pos] adapted-male 1 (dec n))
-        (hcall adapted-female 1)
-        (hfn - 2 n)
-        (rewind pos))
-
       (-> (hparam [stack pos] n)
           (hcall adapted-male 1 (dec n))
           (hcall adapted-female 1)
@@ -368,11 +354,6 @@
 (defn adapted-female
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 1)
-    #_(-> (hcall [stack pos] adapted-female 1 (dec n))
-        (hcall adapted-male 1)
-        (hfn - 2 n)
-        (rewind pos))
-
     (-> (hparam [stack pos] n)
         (hcall adapted-female 1 (dec n))
         (hcall adapted-male 1)
@@ -429,16 +410,8 @@
   (if (empty? coll) (hval [stack pos] 0)
     (let [ [c v] (-> (first coll) (#(vector (cost %) (value %)))) 
            tail (rest coll) ]
-        #_(if (-> c (> capacity))
-            (-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
-            (-> (hcall [stack pos] adapted-KS 2 tail (- capacity c))
-                (hfn + 2 v)
-                (hcall adapted-KS 2 tail capacity)
-                (hfn max 2)
-                (rewind pos)))
-                
          (if (-> c (> capacity))
-            (-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
+            #_(-> (hcall [stack pos] adapted-KS 2 tail capacity) (rewind pos))
             #_(-> (hcall [stack pos] adapted-KS 2 tail capacity) 
                 (hparam v)
                 (hcall adapted-KS 2 tail (- capacity c))
@@ -448,42 +421,30 @@
                
                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
                ;;                                                   ;;
-               ;;  below is what the macro transform should yield:  ;; 
+               ;;  below is the equivalent of what a DSL            ;;
+               ;;  macro should yield:                              ;; 
                ;;                                                   ;;
                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
             (-> (hparam [stack pos] tail)
                 (hparam capacity)
                 (hcall adapted-KS 2)
+                (rewind pos)) 
+
+            (-> (hparam [stack pos] tail)
+                (hparam capacity)
+                (hcall #(adapted-KS %1 %2 %3 %4) 2)
                 (hparam v)
                 (hparam tail)
                 (hparam (- capacity c))
-                (hcall adapted-KS 2)
-                (hfn + 2)
-                (hfn max 2)
+                (hcall #(adapted-KS %1 %2 %3 %4) 2)
+                (hfn #(+ %1 %2) 2)
+                (hfn #(max %1 %2) 2)
                 (rewind pos))
                 
                 
                 ))))
 
-(comment "
-Walked: max
-Walked: KS
-Walked: tail
-Walked: capacity
-Walked: (KS tail capacity)
-Walked: +
-Walked: v
-Walked: KS
-Walked: tail
-Walked: -
-Walked: capacity
-Walked: c
-Walked: (- capacity c)
-Walked: (KS tail (- capacity c))
-Walked: (+ v (KS tail (- capacity c)))
-Walked: (max (KS tail capacity) (+ v (KS tail (- capacity c))))
-")
 (deftest single-mutually-recursive-nested-knapsack-test
   (testing "Adaptation of knapsack 1/0 should yield the same value as its counterpart"
     (let [
@@ -513,9 +474,20 @@ Walked: (max (KS tail capacity) (+ v (KS tail (- capacity c))))
 (defn adapted-recursive-and
 [ stack pos & args ]
   (if (empty? args) (hval [stack pos] true)
-    (-> (apply hcall [stack pos] adapted-recursive-and (count (rest args)) (rest args))
+    #_(-> (apply hcall [stack pos] adapted-recursive-and (count (rest args)) (rest args))
         (hfn #(and %1 %2)  2 (first args))
-        (rewind pos))))
+        (rewind pos))
+      
+       (-> (hparam [stack pos] (first args))
+           (hparam-list (rest args))
+
+            ;; either of the next two forms is OK, maybe 
+            ;; the second is preferable within DSL macro impl
+           (hcall adapted-recursive-and (count (rest args)))
+           #_(hcall (fn [& more] (apply adapted-recursive-and more)) (count (rest args)))
+
+           (hfn #(and %1 %2) 2)
+           (rewind pos))))
 
 
 (defn count-args
@@ -527,8 +499,15 @@ Walked: (max (KS tail capacity) (+ v (KS tail (- capacity c))))
 (defn adapted-count-args
 [ stack pos & args ]
   (if (empty? args) (hval [stack pos] 0)
-    (-> (apply hcall [stack pos] adapted-count-args (-> (count args) dec) (rest args))
+    #_(-> (apply hcall [stack pos] adapted-count-args (-> (count args) dec) (rest args))
         (hfn + 2 1)
+        (rewind pos))
+
+    ;; DSL macro should yield:
+    (-> (hparam [stack pos] 1)
+        (hparam-list (rest args))
+        (hcall adapted-count-args (count (rest args)))
+        (hfn #(+ %1 %2) 2)
         (rewind pos))))
 
 

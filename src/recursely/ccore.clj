@@ -98,9 +98,18 @@
  Equivalent to (hval s&p v), except that the returned cursor points past the added element
  to allow for the next insertion. s&p is a [stack pos] tuple.
 "
-[ s&p  v ]
- (let [ [stack pos] (hval s&p v)]
-    [stack pos]))
+[ s&p v]
+  (hval s&p v))
+
+
+(defn hparam-list
+"Hoists all elements of params individually on the stack. params is a seq.
+"
+[ s&p params ]
+(if (empty? params) s&p
+   (recur (hparam s&p (first params)) (rest params))))
+            
+
 
 
 (defn hoist-fn

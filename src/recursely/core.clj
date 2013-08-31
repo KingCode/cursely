@@ -163,7 +163,7 @@ where each func spec is a name-args-body
  to in-form's structure and regs contents.
  "
  [ in-form regs ]
-   (eval (transform-str in-form regs)))
+   (read-string (transform-str in-form regs)))
 
 
 (defn transform-str
