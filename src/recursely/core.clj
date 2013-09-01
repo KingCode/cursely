@@ -84,8 +84,7 @@ where each func spec is a name-args-body
 (defn hval-form
 [ form ]
   (let [ lit (strip-literal form) ]
-     (-> (str "(recursely.ccore/hval [stack pos] " lit ")") read-string)))
- ;;   `(hval [~'stack ~'pos] ~lit)))
+     (-> (str "(" NSPFX "hval [stack pos] " lit ")") read-string)))
 
 
 (defn str-fn-form
@@ -94,6 +93,11 @@ where each func spec is a name-args-body
                     (-> "arg" (str x))))
                    (interpose " ") (apply str)) ]
     (str "(fn [" params "] (" (str fsym) " " params "))")))
+
+
+(defn str-fn-form-apply
+[ fsym ]
+  (str "(fn [& args] (apply " (str fsym) " args))"))
 
 
 (defn of-interest?
@@ -122,30 +126,49 @@ where each func spec is a name-args-body
 (let [ emit-state? (not (started?-and-set started?-atom)) 
        apply? (is-apply? form)
        fn-symbol (if apply? (second form) (first form)) 
+       hcall? (in? regs fn-symbol)
        siz (count form)
-       numargs (if apply? (- siz 2) (dec siz)) ] 
+       numargs (if apply? (-> (- siz 3)                 ;;subtract 3 for 'apply myfunc', and last elem (a seq) 
+                              (+ (count (last form)))   ;;add size of last elem (a seq)
+                              #_(+ (if hcall? 2 0)))      ;;do NOT add stack pos meta params here.. 
+                          (-> (dec siz)
+                              #_(+ (if hcall? 2 0)))) 
+
+       numparams (if hcall? (+ numargs 2) numargs)      ;; this should be used only for non-apply 
+    ]
 (-> (str "(")
-    (str (if apply? "apply " ""))                ;;space
     (str NSPFX)
     (str (if (in? regs fn-symbol) "hcall" "hfn"))
-    (str (if emit-state? " [stack pos] " " "))  ;;space
-    (str (str-fn-form fn-symbol numargs))
-    (str " ")                                   ;;space
+    (str (if emit-state? " [stack pos] " " "))              ;;space
+    (str (if apply? (str-fn-form-apply fn-symbol)
+                        (str-fn-form fn-symbol numparams)))
+    (str " ")                                               ;;space
     (str numargs)
     (str ")"))))
 
 
-(defn emit-param
-[ sym started?-atom ]
+(defn emit-param*
+[ type sym started?-atom ]
 (let [ emit-state? (not (started?-and-set started?-atom)) ]
-   (-> (str "(" NSPFX "hparam ")
+   (-> (str "(" NSPFX type " ") 
        (str (if emit-state? "[stack pos] " ""))
        (str sym ")"))))
    
+(defn emit-param
+[ sym started?-atom ]
+(emit-param* "hparam" sym started?-atom))
+
+
+(defn emit-paramlist
+[ sym started?-atom ]
+(emit-param* "hparam-list" sym started?-atom))
+
 
 (defn emit-rewind
 []
-(str "(rewind pos)"))
+(-> (str "(")
+    (str NSPFX)
+    (str "rewind pos)")))
 
 (defn emit-close
 []
@@ -155,7 +178,7 @@ where each func spec is a name-args-body
 []
 (str "(->"))
 
-(declare transform-str transform-rest-str is-apply? starts-with?)
+(declare transform-str transform-rest-str transform-rest-apply-str is-apply? starts-with?)
 
 (defn transform
 "Yields a form which invokes a sequence of hparam/hfn/hcall invocations according 
@@ -172,19 +195,25 @@ where each func spec is a name-args-body
  and whether @started? is true; the contents of buffer is prefixed to the output.
 "
 ([ in-form regs started?]
-(do (println "Transform-str: in-form=>'" in-form "<, REGS=" regs) 
+(do #_(println "Transform-str: in-form=>'" in-form "<, REGS=" regs) 
   (-> 
       (str (if (not (of-interest? in-form regs))
+
                         ;; no nested forms requiring special treatment:
                         ;; emit param with form as is
-                        (do (println "transform-str: found nothing")
+                        (do #_(println "transform-str: found nothing")
+
                         (emit-param in-form started?))
 
                         ;; nested forms having registered functions:
                         ;; handle them first as params to this function symbol,
                         ;; then hoist fn call itself.
-                        (-> (str (transform-rest-str (rest in-form) regs started?))
-                            (str (emit-invoke in-form regs started?))))))))
+
+                        (let [ apply? (is-apply? in-form)
+                               rest-fn (if apply? transform-rest-apply-str transform-rest-str) 
+                               rest-tgt (if apply? (rest (rest in-form)) (rest in-form)) ]
+                            (-> (str (rest-fn rest-tgt regs started?))
+                                (str (emit-invoke in-form regs started?)))))))))
 ([ in-form regs ]
   (str (emit-open) 
        (transform-str in-form regs (atom false))
@@ -193,13 +222,25 @@ where each func spec is a name-args-body
 
 
 (defn transform-rest-str
-"Same as transform, except that elements in function position are treated like any other.
+"Maps each of its non-list element (including those in function position) to an (hparam..) invocation.
+ Lists elements are processed by transform-str.
 "
 [ in-form regs started? ]
-(do (println "Transform-REST-str: in-form=>'" in-form "<") 
-   (->> (map #(do (println "MAP LOOP: " %) (if (list? %) (transform-str % regs started?)
-                            (emit-param % started?))) in-form)
-        (reduce #(str %1 %2)))))
+   (->> (map #(if (list? %) (transform-str % regs started?)
+                            (emit-param % started?)) in-form)
+        (reduce #(str %1 %2))))
+
+
+(defn transform-rest-apply-str
+"Same as transform-rest-str, except that the last element is mapped to an hparam-list invocation.
+ Others are processed as they would be transform-rest-str.
+"
+[ form regs started? ]
+(let [ last (-> form reverse first) 
+       last-out (if (of-interest? last) (transform-str last regs started?) 
+                                        (emit-paramlist last started?)) ]
+    (-> (transform-rest-str (butlast form) regs started?) 
+        (str last-out))))
 
 
 (defn is-apply?
