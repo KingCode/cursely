@@ -1,7 +1,7 @@
 (ns recursely.core
   (:use recursely.ccore 
         [clojure [walk]]
-        [clj-utils [core :only [thread-it macro-call funcvar macro? is-case]]
+        [clj-utils [core :only [thread-it is-case]]
                    [coll :only [in?]]]))
 
 (def NSPFX "recursely.ccore/")
@@ -90,20 +90,19 @@ where each func spec is a name-args-body
 
 (defn str-fn-form
 [ fsym numargs ]
-  (if (macro? fsym)
-        (let [ params (->> (-> (for [x (range 1 (inc numargs))]
-                            (-> "arg" (str x))))
-                           (interpose " ") (apply str)) ]
-            (str "(fn [" params "] (" (str fsym) " " params "))"))
-        (str fsym)))
+(let [ params (->> (-> (for [x (range 1 (inc numargs))]
+                    (-> "arg" (str x))))
+                   (interpose " ") (apply str)) ]
+    (str "(fn [" params "] (" (str fsym) " " params "))")))
 
 
 (defn of-interest?
 "Yields true if a symbol in regs is found as anywhere within form."
 [ form regs ]
-  (let [ found? (atom false) ]
-        (postwalk #(if (in? regs %) (do (reset! found? true) %) %) form)
-        @found?))
+(let [ found? (atom false) ]
+    (postwalk #(if (in? regs %) (do (reset! found? true) %) %) form)
+    @found?))
+
 
 (defn started?-and-set
 "Yields the value of started? atom. If false, started?'s value is set to true.

@@ -203,7 +203,14 @@
     (if (empty? coll) 
         (hval [stack pos] 0)
           (-> (hparam [stack pos] 1)
-              (hcall adapted-counter 1 (rest coll))
+            
+              ;;this used only when not included with hcall
+              (hparam (rest coll))
+              #_(hcall adapted-counter 1)
+
+              ;; note the 2 extra params when using a wrapper to account for stack & pos
+              (hcall (fn [arg1 arg2 arg3] (adapted-counter arg1 arg2 arg3)) 1)
+              #_(hcall adapted-counter 1 (rest coll))
               (hfn + 2)
               (rewind pos))))
 
@@ -238,8 +245,13 @@
     (cond (= 1 x) (hval [stack pos] true)
           (= 0 x) (hval [stack pos] false)
         :else
-            (-> (hcall [stack pos] adapted-recursive-odd? 1 (- x 2))
-                    (rewind pos))))
+            #_(-> (hcall [stack pos] adapted-recursive-odd? 1 (- x 2))
+                    (rewind pos))
+
+            ;; DSL should yield:
+            (-> (hparam [stack pos] (- x 2))
+                (hcall (fn [arg1 arg2 arg3] (adapted-recursive-odd? arg1 arg2 arg3)) 1)
+                (rewind pos))))
         
 (if DEBUG-play-test-basic (do
 (h/add-hook #'adapted-recursive-odd? #'debug-info-1)
@@ -288,7 +300,15 @@
 (do #_(println "ADAPTED-CAT: n=" n ", acc=" acc)
     (if (zero? n) (hval [stack pos] acc)
       (let [ term (if (= 0 (rem n 2)) n 0) ]
-        (-> (hcall [stack pos] adapted-hat 2 (dec n) (+ term acc)) (rewind pos))))))
+        #_(-> (hcall [stack pos] adapted-hat 2 (dec n) (+ term acc)) (rewind pos))
+
+          ;; DSL macro should yield:
+          (-> (hparam [stack pos] (dec n))
+              (hparam term)
+              (hparam acc)
+              (hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+              (hcall (fn [arg1 arg2 arg3 arg4] (adapted-hat arg1 arg2 arg3 arg4)) 2)
+              (rewind pos))))))
 ([ stack pos n]
   (adapted-cat stack pos n 0)))
 
@@ -297,7 +317,15 @@
 (do #_(println "ADAPTED-HAT: n=" n ", acc=" acc)
   (if (zero? n) (hval [stack pos] acc)
      (let [ term (if (= 0 (rem n 3)) n 0) ]
-        (-> (hcall [stack pos] adapted-cat 2 (dec n) (+ term acc)) (rewind pos))))))
+        #_(-> (hcall [stack pos] adapted-cat 2 (dec n) (+ term acc)) (rewind pos))
+        
+        ;;DSL macro should yield:
+        (-> (hparam [stack pos] (dec n))
+            (hparam term)
+            (hparam acc)
+            (hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+            (hcall (fn [arg1 arg2 arg3 arg4] (adapted-cat arg1 arg2 arg3 arg4)) 2)
+            (rewind pos))))))
 ([ stack pos n ]
   (adapted-hat stack pos n 0)))
 
@@ -345,21 +373,36 @@
 (defn adapted-male
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 0)
-      (-> (hparam [stack pos] n)
+      #_(-> (hparam [stack pos] n)
           (hcall adapted-male 1 (dec n))
           (hcall adapted-female 1)
           (hfn - 2)
+          (rewind pos))
+
+      ;; DSL macro should yield:
+      (-> (hparam [stack pos] n)
+          (hparam (dec n))
+          (hcall (fn [arg1 arg2 arg3] (adapted-male arg1 arg2 arg3)) 1)
+          (hcall (fn [arg1 arg2 arg3] (adapted-female arg1 arg2 arg3)) 1)
+          (hfn (fn [arg1 arg2] (- arg1 arg2)) 2)
           (rewind pos))))
 
 (defn adapted-female
 [ stack pos n ]
   (if (zero? n) (hval [stack pos] 1)
-    (-> (hparam [stack pos] n)
+    #_(-> (hparam [stack pos] n)
         (hcall adapted-female 1 (dec n))
         (hcall adapted-male 1)
         (hfn - 2)
         (rewind pos)
-        )))
+        )
+
+    (-> (hparam [stack pos] n)
+        (hparam (dec n))
+        (hcall (fn [arg1 arg2 arg3] (adapted-female arg1 arg2 arg3)) 1)
+        (hcall (fn [arg1 arg2 arg3] (adapted-male arg1 arg2 arg3)) 1)
+        (hfn (fn [arg1 arg2] (- arg1 arg2)) 2)
+        (rewind pos))))
 
 
 (deftest two-mutually-recursive-nested-test
@@ -428,7 +471,7 @@
 
             (-> (hparam [stack pos] tail)
                 (hparam capacity)
-                (hcall adapted-KS 2)
+                (hcall (fn [arg1 arg2 arg3 arg4] (adapted-KS arg1 arg2 arg3 arg4)) 2)
                 (rewind pos)) 
 
             (-> (hparam [stack pos] tail)
@@ -440,10 +483,7 @@
                 (hcall #(adapted-KS %1 %2 %3 %4) 2)
                 (hfn #(+ %1 %2) 2)
                 (hfn #(max %1 %2) 2)
-                (rewind pos))
-                
-                
-                ))))
+                (rewind pos))))))
 
 (deftest single-mutually-recursive-nested-knapsack-test
   (testing "Adaptation of knapsack 1/0 should yield the same value as its counterpart"
@@ -483,8 +523,8 @@
 
             ;; either of the next two forms is OK, maybe 
             ;; the second is preferable within DSL macro impl
-           (hcall adapted-recursive-and (count (rest args)))
-           #_(hcall (fn [& more] (apply adapted-recursive-and more)) (count (rest args)))
+           #_(hcall adapted-recursive-and (count (rest args)))
+           (hcall (fn [& more] (apply adapted-recursive-and more)) (count (rest args)))
 
            (hfn #(and %1 %2) 2)
            (rewind pos))))
@@ -506,7 +546,8 @@
     ;; DSL macro should yield:
     (-> (hparam [stack pos] 1)
         (hparam-list (rest args))
-        (hcall adapted-count-args (count (rest args)))
+        #_(hcall adapted-count-args (count (rest args)))
+        (hcall (fn [& more] (apply adapted-count-args more)) (count (rest args)))
         (hfn #(+ %1 %2) 2)
         (rewind pos))))
 
@@ -569,16 +610,32 @@
             (hcall adapted-power-counter 4)
             (rewind pos))
             
-        (-> 
+        #_(-> 
             (hparam [stack pos] (rest power-in-numbers1))
             (hparam factor)
-            (hcall adapted-counter 1 power-in-numbers1)
+            (hparam power-in-numbers1)
+            (hcall adapted-counter 1)
             (hcall adapted-counter 1 power-in-numbers2)
             (hfn + 2)
             (hfn * 2)
             (hparam (rest power-in-numbers2))
             (hparam (rest coll))
             (hcall adapted-power-counter 4)
+            (rewind pos))
+            
+            ;;;;;;;DSL macro should yield:
+          (->
+            (hparam [stack pos] (rest power-in-numbers1))
+            (hparam factor)
+            (hparam power-in-numbers1)
+            (hcall (fn [arg1 arg2 arg3] (adapted-counter arg1 arg2 arg3)) 1)
+            (hparam power-in-numbers2)
+            (hcall (fn [arg1 arg2 arg3] (adapted-counter arg1 arg2 arg3)) 1)
+            (hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+            (hfn (fn [arg1 arg2] (* arg1 arg2)) 2)
+            (hparam (rest power-in-numbers2))
+            (hparam (rest coll))
+            (hcall (fn [arg1 arg2 arg3 arg4 arg5 arg6] (adapted-power-counter arg1 arg2 arg3 arg4 arg5 arg6)) 4)
             (rewind pos))))
 
 (deftest nested-mix-of-literals-and-fns-asparams-test

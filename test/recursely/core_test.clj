@@ -18,13 +18,13 @@
 
                 exp '(-> (recursely.ccore/hparam [stack pos] tail)
                     (recursely.ccore/hparam capacity)
-                    (recursely.ccore/hcall adapted-KS 2)
+                    (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (adapted-KS arg1 arg2 arg3 arg4))  2)
                     (recursely.ccore/hparam v)
                     (recursely.ccore/hparam tail)
                     (recursely.ccore/hparam (- capacity c)) 
-                    (recursely.ccore/hcall adapted-KS 2)
-                    (recursely.ccore/hfn + 2)
-                    (recursely.ccore/hfn max 2)
+                    (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (adapted-KS arg1 arg2 arg3 arg4))  2)
+                    (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                    (recursely.ccore/hfn (fn [arg1 arg2] (max arg1 arg2)) 2)
                     (recursely.ccore/rewind pos)) 
 
                 act (transform src #{'KS})
