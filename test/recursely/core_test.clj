@@ -151,3 +151,19 @@
             act (transform src #{'count-args}) ]
 
         (is (= exp act)))))
+
+
+(deftest transform-test-ackermann
+   (testing "Should translate an Ackermann's function sub form into a correct adapted one"
+        (let [ src '(ack (dec m) (ack m (dec n)))
+
+               exp '(-> (recursely.ccore/hparam [stack pos] (dec m))
+                        (recursely.ccore/hparam m)
+                        (recursely.ccore/hparam (dec n))
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (ack arg1 arg2 arg3 arg4)) 2)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (ack arg1 arg2 arg3 arg4)) 2)
+                        (recursely.ccore/rewind pos)) 
+
+               act (transform src #{'ack})  ]
+
+            (is (= exp act)))))

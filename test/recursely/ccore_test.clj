@@ -649,4 +649,48 @@
 
           (is (= exp act)))))
 
-           
+
+                    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                    ;;                                              ;;
+                    ;;       Ackermann function                     ;; 
+                    ;;                                              ;;
+                    ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;
+;; According to http://en.wikipedia.org/wiki/Ackermann_function:
+;;
+(defn ack
+[ m n ]
+  (cond (= 0 m)  (inc n)
+        (and (-> m (> 0)) (= 0 n)) 
+                            (ack (dec m) 1)
+        (and (-> m (> 0)) (-> n (> 0)))
+                            (ack (dec m) (ack m (dec n)))
+    :else (throw (Exception. "ack: undefined"))))
+
+
+(defn xack
+[ stack pos m n]
+  (cond (= 0 m) (hval [stack pos] (inc n))
+        (and (-> m (> 0)) (= 0 n)) 
+                  (-> (hparam [stack pos] (dec m))
+                     (hparam 1)
+                     (hcall (fn [arg1 arg2 arg3 arg4] (xack arg1 arg2 arg3 arg4)) 2)
+                     (rewind pos))
+        (and (-> m (> 0)) (-> n (> 0)))
+                (-> (hparam [stack pos] (dec m))
+                    (hparam m)
+                    (hparam (dec n))
+                    (hcall (fn [arg1 arg2 arg3 arg4] (xack arg1 arg2 arg3 arg4)) 2)
+                    (hcall (fn [arg1 arg2 arg3 arg4] (xack arg1 arg2 arg3 arg4)) 2)
+                    (rewind pos))
+    :else
+        (throw (Exception. "xack: undefined")))) 
+
+
+(deftest Ackermanns_function-test
+    (testing "Should work with adapted Ackermanns' function"
+        (let [ exp (for [x (range 4) y (range 5) ] (ack x y)) 
+               act (for [x (range 4) y (range 5) ] (play xack x y)) ]
+            (is (= exp act)))))
