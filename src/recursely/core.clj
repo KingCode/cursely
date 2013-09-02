@@ -119,6 +119,25 @@ where each func spec is a name-args-body
 
 (declare is-apply?)
 
+
+(defn apply-numargs
+"Yields a renders a form computing a runtime number of stacked arguments
+ for an (apply...) form, based on in-form's structure.
+ in-form is assumed to have 'apply in function position and a seq as its
+ last element.
+"
+[ inf ]
+  (let [ pfx-args (-> (count inf) (- 3))           ;;subtract 3 for 'apply myfunc', and last elem (a seq) 
+         variadic-form (->  (str " (count ") 
+                            (str (last inf))
+                            (str ")")) ]
+    (if (= 0 pfx-args) variadic-form
+                       (-> "(+ " 
+                            (str pfx-args " ")
+                            (str variadic-form)
+                            (str ")")))))
+
+
 (defn emit-invoke
 "Yields a hcall or hfn call. If the target fn symbol is in regs, the call is an hcall, else it is an hfn.
 "
@@ -128,13 +147,11 @@ where each func spec is a name-args-body
        fn-symbol (if apply? (second form) (first form)) 
        hcall? (in? regs fn-symbol)
        siz (count form)
-       numargs (if apply? (-> (- siz 3)                 ;;subtract 3 for 'apply myfunc', and last elem (a seq) 
-                              (+ (count (last form)))   ;;add size of last elem (a seq)
-                              #_(+ (if hcall? 2 0)))      ;;do NOT add stack pos meta params here.. 
+       numargs (if apply? (apply-numargs form)
                           (-> (dec siz)
-                              #_(+ (if hcall? 2 0)))) 
+                              #_(+ (if hcall? 2 0))))
 
-       numparams (if hcall? (+ numargs 2) numargs)      ;; this should be used only for non-apply 
+       numparams (if hcall? (if apply? nil (+ numargs 2)) numargs)      ;; this should be used only for non-apply 
     ]
 (-> (str "(")
     (str NSPFX)
@@ -237,9 +254,10 @@ where each func spec is a name-args-body
 "
 [ form regs started? ]
 (let [ last (-> form reverse first) 
-       last-out (if (of-interest? last) (transform-str last regs started?) 
+       but-last (butlast form)
+       last-out (if (of-interest? last regs) (transform-str last regs started?) 
                                         (emit-paramlist last started?)) ]
-    (-> (transform-rest-str (butlast form) regs started?) 
+    (-> (if (empty? but-last) "" (transform-rest-str (butlast form) regs started?)) 
         (str last-out))))
 
 

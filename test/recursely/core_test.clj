@@ -117,3 +117,23 @@
             act (transform src #{'power-counter 'counter}) ]
 
         (is (= exp act)))))
+
+
+(deftest transform-test-variadic
+  (testing "A form using apply should yieldthe correct adapted form"
+    (let [ src '(and (first args) (apply recursive-and (rest args)))
+
+           exp '(-> (recursely.ccore/hparam [stack pos] (first args))
+                (recursely.ccore/hparam-list (rest args))
+                (recursely.ccore/hcall (fn [& args] (apply recursive-and args)) (count (rest args)))
+                (recursely.ccore/hfn (fn [arg1 arg2] (and arg1 arg2)) 2)
+                (recursely.ccore/rewind pos))
+
+           act (transform src #{'recursive-and}) ]
+         (do
+    (println "EXPECTED: ")  
+        (foreach [ f exp] (println f)) 
+    (println "ACTUAL: " ) 
+        (foreach [ f act] (println f)))
+ 
+        (is (= exp act)))))            
