@@ -130,10 +130,24 @@
                 (recursely.ccore/rewind pos))
 
            act (transform src #{'recursive-and}) ]
-         (do
+         #_(do
     (println "EXPECTED: ")  
         (foreach [ f exp] (println f)) 
     (println "ACTUAL: " ) 
         (foreach [ f act] (println f)))
  
         (is (= exp act)))))            
+
+(deftest transform-test-variadic-2
+   (testing "A form using apply should yield a correct adapted form"
+     (let [ src '(+ 1 (apply count-args (rest args)))
+
+            exp '(-> (recursely.ccore/hparam [stack pos] 1)
+                    (recursely.ccore/hparam-list (rest args))
+                    (recursely.ccore/hcall (fn [& args] (apply count-args args)) (count (rest args)))
+                    (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                    (recursely.ccore/rewind pos))
+
+            act (transform src #{'count-args}) ]
+
+        (is (= exp act)))))
