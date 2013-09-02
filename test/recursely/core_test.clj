@@ -167,3 +167,23 @@
                act (transform src #{'ack})  ]
 
             (is (= exp act)))))
+
+
+(deftest transform-test-mac91
+    (testing "Should translate a MacCarty's 91 sub form into a correct adapted one"
+        (let [ src '(mc91 (mc91 (+ n 11)))
+               exp '(-> (recursely.ccore/hparam [stack pos] (+ n 11))
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3] (mc91 arg1 arg2 arg3)) 1)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3] (mc91 arg1 arg2 arg3)) 1)
+                        (recursely.ccore/rewind pos))
+
+               act (transform src #{'mc91}) ]
+
+        #_(do
+    (println "EXPECTED: ")
+        (foreach [ f exp] (println f))
+    (println "ACTUAL: " )
+        (foreach [ f act] (println f)))
+
+            (is (= exp act)))))
+                        

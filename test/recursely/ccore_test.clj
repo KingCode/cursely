@@ -694,3 +694,32 @@
         (let [ exp (for [x (range 4) y (range 5) ] (ack x y)) 
                act (for [x (range 4) y (range 5) ] (play xack x y)) ]
             (is (= exp act)))))
+
+                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                ;;                                          ;;
+                ;;     McCarthy's 91 function               ;;
+                ;;                                          ;;
+                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn mc91 
+[ n ]
+   (cond (-> n (> 100)) (- n 10) 
+       :else
+            (mc91 (mc91 (+ n 11)))))
+
+
+(defn mc91-prime
+[ stack pos n ]
+   (cond (-> n (> 100)) (hval [stack pos] (- n 10))
+        :else
+            (-> (hparam [stack pos] (+ n 11))
+                (hcall (fn [arg1 arg2 arg3] (mc91-prime arg1 arg2 arg3)) 1)
+                (hcall (fn [arg1 arg2 arg3] (mc91-prime arg1 arg2 arg3)) 1)
+                (rewind pos))))
+                
+
+(deftest MacCarthys91_test
+    (testing "Should work with adapted MacCarthy's 91 function"
+        (let [ exp (for [n (range 200)] (mc91 n))
+               act (for [n (range 200)] (play mc91-prime n)) ]
+            (is (= exp act)))))
