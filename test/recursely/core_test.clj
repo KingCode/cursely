@@ -1,4 +1,5 @@
 (ns recursely.core-test
+  (:refer-clojure :exclude [pop peek replace remove])
   (:use recursely.core)
   (:use  
         [clj-utils [coll :only [subsq foreach]]
@@ -187,3 +188,28 @@
 
             (is (= exp act)))))
                         
+(deftest transform-test-tak
+    (testing "Should translate a Tak function sub form into a correct adapted one"
+        (let [ src '(tak (tak (dec x) y z)
+                          (tak (dec y) z x)
+                          (tak (dec z) x y))
+
+               exp '(-> 
+                        (recursely.ccore/hparam [stack pos] (dec x))
+                        (recursely.ccore/hparam y)
+                        (recursely.ccore/hparam z)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4 arg5] (tak arg1 arg2 arg3 arg4 arg5)) 3)
+                        (recursely.ccore/hparam (dec y))
+                        (recursely.ccore/hparam z)
+                        (recursely.ccore/hparam x)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4 arg5] (tak arg1 arg2 arg3 arg4 arg5)) 3)
+                        (recursely.ccore/hparam (dec z))
+                        (recursely.ccore/hparam x)
+                        (recursely.ccore/hparam y)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4 arg5] (tak arg1 arg2 arg3 arg4 arg5)) 3)
+                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4 arg5] (tak arg1 arg2 arg3 arg4 arg5)) 3)
+                        (recursely.ccore/rewind pos))                        
+
+               act (transform src #{'tak}) ]
+
+            (is (= exp act)))))

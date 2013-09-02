@@ -723,3 +723,60 @@
         (let [ exp (for [n (range 200)] (mc91 n))
                act (for [n (range 200)] (play mc91-prime n)) ]
             (is (= exp act)))))
+
+
+                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+                ;;                                          ;;
+                ;;              Tak function                ;;
+                ;;                                          ;;
+                ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; FROM http://en.wikipedia.org/wiki/Tak_%28function%29
+
+
+;; def tak( x, y, z)
+;;   if y < x
+;;     tak( 
+;;          tak(x-1, y, z),
+;;          tak(y-1, z, x),
+;;          tak(z-1, x, y)
+;;        )
+;;   else
+;;     z
+;;   end
+;; end
+
+(defn tak
+[x y z]
+  (if (< y x)
+        (tak (tak (dec x) y z)
+             (tak (dec y) z x)
+             (tak (dec z) x y))
+
+        z))
+
+
+(defn xtak
+[ stack pos x y z ]
+  (if (< y x)
+      (->
+        (hparam [stack pos] (dec x))
+        (hparam y) (hparam z)
+        (hcall xtak 3)
+        (hparam (dec y))
+        (hparam z)(hparam x)
+        (hcall xtak 3)
+        (hparam (dec z))
+        (hparam x)(hparam y)
+        (hcall xtak 3)
+        (hcall xtak 3)
+        (rewind pos))
+    
+      (hval [stack pos] z)))
+
+(deftest Tak-function_test
+    (testing "Adapted Tarai function should yield the same results as the original"
+        (let [  X 10 Y 5 Z 8 
+                exp (for [x (range X) y (range Y) z (range Z)] (tak x y z))
+                act (for [x (range X) y (range Y) z (range Z)] (play xtak x y z)) ]
+            (is (= exp act)))))
