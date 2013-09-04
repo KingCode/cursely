@@ -2,7 +2,7 @@
   (:use recursely.ccore 
         [clojure [walk]]
         [clj-utils [core :only [thread-it is-case]]
-                   [coll :only [in?]]]))
+                   [coll :only [in? split-find]]]))
 
 (def NSPFX "recursely.ccore/")
 
@@ -39,36 +39,54 @@ Two or more mutually recursely functions can be defined at once:
 where each func spec is a name-args-body
 "
 )
-;; High Level Alg: adapt-1
+;; ADAPT-1
 ;; Input: a form F implementing a recursive function, a set S of registered functions names
 ;; Output: a form Fprime implementing an adapted version of the function implemented by F
-;; 1) Parse-markup: perform POSTWALK of F producing Ftemp
-;;   For each form in F
-;;   1-1) If a non-list and prefixed with a $, replace the form with a (hval...) form
-;;   1-2) If a list with a $ prefixing the form in function position, "LF": 
-;;      1-2-1) strip away the $ from the form into form LFtemp and 
-;;      1-2-2) transform into LFout using (Transform LFtemp, S) 
-;;      1-2-3) output the resulting LFprime 
-;;  (for all other forms yield the input form unchanged)
-;; 
-;;      Transform 
-;;      Input: form F, a list, requiring conversion; set S; atom STARTED; string BUFFER 
-;;      
-;;          - if a postwalk on F does not reveal any symbol in S:
-;;                    (hparam F) * OR, if this is the first, do instead (-> (hparam [stack pos] F-SUB)
-;;                                      and set STARTED to true
 ;;
-;;          - else, its head is a fn or macro call: 
-;;                    -- perform Transform-rest on (rest F): 
-;;                    -- emit (hfn <head fn/macro> (count F)) * see above 
-;;                                                            ** if Fin S, use (hcall ...) instead
-;;                             
-;;       Transform-rest
-;;       Input: form F; set S; atom STARTED; string BUFFER
-;;       For each form f' of F:
-;;              - if a list, invoke (Transform f' S STARTED)
-;;              - else, emit (hparam ....)
+;; - Parse-markup: perform POSTWALK of F producing Ftemp
+;;   For each form FIN in F
+;;   -- If FIN is a list and has a direct child form '$, the next form FIN-L is a literal collection:
+;;      --- replace FIN-L with a (hval...) wrapper form around FIN-L, remove '$ and output the result
+;;   -- If FIN is a list with a $ prefixing the form in function position: 
+;;      --- strip away the $ from FIN to obtain form FTMP
+;;      --- transform into FOUT using (Transform FTMP, S) 
+;;      --- output FOUT instead of F
+;;   -- if FIN is a form starting with $, strip $ and wrap the remaining value with
+;;      a (hval...) wrapper form FOUT and output FOUT 
+;;   -- else output FIN unchanged
+
+
+;; TRANSFORM 
+;; Input: form F, a list; set S; atom STARTED; string BUFFER 
+;; Output: form F' an adapted version of F.
+;;      
+;; - if a postwalk on F does not reveal any symbol in S:
+;;      -- return (hparam F) * OR, if this is the first, do instead (-> (hparam [stack pos] F-SUB)
+;;                                      and set STARTED to true
+;; - else, its head is a fn or macro call: 
+;;      -- perform Transform-rest on (rest F): 
+;;      -- emit (hfn <head fn/macro> (count F)) * see above 
+;;                                              ** if Fin S, use (hcall ...) instead
+
+
+;; TRANSFORM-REST*
+;; Input: form F; set S; atom STARTED; string BUFFER
+;; - For each form f' of F:
+;;   -- if a list, invoke (Transform f' S STARTED)
+;;   -- else, emit (hparam ....) *  see above
+;;                               ** ditto
 ;;              
+
+;; OPTIMIZE (not implemented)
+;; Input: form F, a list output by TRANSFORM
+;; Output: an optimized version of F, i.e. with possibly smaller number of (hparam invocations)
+;; - PostWalk through F, and for each subform FSUB:
+;;   -- if it nests one or more (hcall..) forms, create an FSUB'
+;;      --- walk through its subforms FSUBSUBs in reversed order
+;;          ---- if an hcall or an hfn, retrieve all following (hparams..) 
+;;               ----- append the params in reversed order to the end of the (hcall...) FSUB' form
+;;          ---- otherwise append FSUBSUB to FSUB' as is
+;;          ---- output  FSUB' instead of FSUB
 
 (defn strip
 [ form ]
@@ -170,6 +188,7 @@ where each func spec is a name-args-body
    (-> (str "(" NSPFX type " ") 
        (str (if emit-state? "[stack pos] " ""))
        (str sym ")"))))
+       
    
 (defn emit-param
 [ sym started?-atom ]
@@ -195,12 +214,20 @@ where each func spec is a name-args-body
 []
 (str "(->"))
 
-(declare transform-str transform-rest-str transform-rest-apply-str is-apply? starts-with?)
+(declare transform transform-str transform-rest-str transform-rest-apply-str is-apply? starts-with?)
+
+(defn adapt-1
+"Transforms form into a form adapted for recursely usage. Yields the adapted form.
+"
+[ form regs ]
+   ;;(postwalk #(
+)
+
 
 (defn transform
 "Yields a form which invokes a sequence of hparam/hfn/hcall invocations according 
  to in-form's structure and regs contents.
- "
+"
  [ in-form regs ]
    (read-string (transform-str in-form regs)))
 
@@ -276,15 +303,49 @@ where each func spec is a name-args-body
         (= form symbol)))
 
 
-(defn starts-with-marker?
+(defn has-marked-coll?
+"Yields marker if found as a direct sub-form of form, or nil.
+"
+[ form marker] 
+  (and (list? form) (some #{marker} form)))
+
+
+(defn notcoll-starts-with-marker?
+"Yields true if a marker prefixes a literal that is not a collection.
+"
+[ form marker ]
+  (let [ fs (str form) ]
+    (and (-> 1 (< (.length fs))) 
+         (-> (str form) (.startsWith marker)))))
+
+
+(defn funcpos-starts-with-marker?
 "Yields true if a form has marker as the prefix to its first symbol if list,
  or prefixes form otherwise.
 "
 [ form marker]
-   (if (list? form)
-        (-> (first form) str (.startsWith marker))
-        (-> (str form) (.startsWith marker))))
+   (and (list? form)
+        (-> (first form) str (.startsWith marker))))
 
+
+(defn replace-endmarks
+"Parses marked forms for end literals to be wrapped in (hval..) forms.
+"
+[ form marker ]
+  (let [ tmp (postwalk 
+                    #(cond (has-marked-coll? % marker) 
+                        (let [ parts (split-find % marker)
+                               parts-1 (first parts)
+                               parts-2 (second parts)
+                               end (rest (rest parts-2)) 
+                               val (second (second parts)) ]
+                            (concat parts-1 [hval-form val] end))
+                :else %) form) ]
+         (postwalk 
+             #(if (notcoll-starts-with-marker? form marker)
+                   (-> (strip-literal %) hval-form) %) 
+              tmp)))
+                            
 
 (defn parse
 "Parses marked up forms in body and replaces them with framework function calls,
@@ -293,10 +354,10 @@ where each func spec is a name-args-body
  Uses marker to indentify marked up literals and forms.
 "
 [ regs body marker ]
-    (postwalk #(cond (and (list? %) (starts-with-marker? % marker)) 
-                                    (let [ stripped (strip % marker) ]
+    (postwalk #(cond (funcpos-starts-with-marker? % marker) 
+                         (let [ stripped (strip % marker) ]
                                         (transform stripped))
-                      (starts-with-marker? %) 
+                      (notcoll-starts-with-marker? %) 
                                     (hval-form %) 
                       :else %) body)) 
                               
