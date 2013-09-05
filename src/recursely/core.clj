@@ -101,8 +101,7 @@ where each func spec is a name-args-body
 
 (defn hval-form
 [ form ]
-  (let [ lit (strip-literal form) ]
-     (-> (str "(" NSPFX "hval [stack pos] " lit ")") read-string)))
+  (-> (str "(" NSPFX "hval [stack pos] " form ")") read-string))
 
 
 (defn str-fn-form
@@ -310,13 +309,13 @@ where each func spec is a name-args-body
   (and (list? form) (some #{marker} form)))
 
 
-(defn notcoll-starts-with-marker?
+(defn is-marked-literal?
 "Yields true if a marker prefixes a literal that is not a collection.
 "
 [ form marker ]
-  (let [ fs (str form) ]
-    (and (-> 1 (< (.length fs))) 
-         (-> (str form) (.startsWith marker)))))
+  (let [ fs (str form) ms (str marker)]
+    (and (-> (.length ms) (< (.length fs))) 
+         (-> fs (.startsWith ms)))))
 
 
 (defn funcpos-starts-with-marker?
@@ -328,42 +327,55 @@ where each func spec is a name-args-body
         (-> (first form) str (.startsWith marker))))
 
 
-(defn replace-endmarks
-"Parses marked forms for end literals to be wrapped in (hval..) forms.
+(defn transval-subform
+"Parses form with single marker literal as a prefix of the following form,
+ and yields a new form without the marker and with the prefixed form wrapped
+ in a framework (hval...) call.
 "
 [ form marker ]
+  (let [ parts (split-find form marker)
+           parts-1 (first parts)
+           parts-2 (second parts)
+           end (rest (rest parts-2)) 
+           val (second parts-2) ]
+        (concat parts-1 [(hval-form val)] end))) 
+
+
+(defn transval
+"Parses form for marked end literals and wraps them in (hval..) forms.
+ Yields the resulting form.
+"
+[ form marker ]
+  ;;process literal colls first
   (let [ tmp (postwalk 
-                    #(cond (has-marked-coll? % marker) 
-                        (let [ parts (split-find % marker)
-                               parts-1 (first parts)
-                               parts-2 (second parts)
-                               end (rest (rest parts-2)) 
-                               val (second (second parts)) ]
-                            (concat parts-1 [hval-form val] end))
-                :else %) form) ]
+                    #(if (has-marked-coll? % marker) (transval-subform % marker) %) 
+                            form) ]
+  ;;now, other lits
          (postwalk 
-             #(if (notcoll-starts-with-marker? form marker)
+             #(if (is-marked-literal? % marker)
                    (-> (strip-literal %) hval-form) %) 
               tmp)))
                             
 
-(defn parse
-"Parses marked up forms in body and replaces them with framework function calls,
- using symbols in regs to recognize recurrent invocations in form.
-
- Uses marker to indentify marked up literals and forms.
+(defn adapt-1
+"Adapts a single form body with markup, replacing in it marked up forms and literals with 
+ one containing framework function calls where needed; regs is a sequential coll with
+ symbols mapping to one or more in marked subforms for which framework calls are generated, along
+ with their descendant forms; marker should be a symbol not used anywhere else than for this purpose,
+ and defaults to '$.
 "
-[ regs body marker ]
+([ regs body marker ]
+  (let [ tmp (transval body marker) ]
     (postwalk #(cond (funcpos-starts-with-marker? % marker) 
                          (let [ stripped (strip % marker) ]
                                         (transform stripped))
-                      (notcoll-starts-with-marker? %) 
-                                    (hval-form %) 
-                      :else %) body)) 
+                      :else %) tmp))
+([ regs body ] 
+    (adapt-1 regs body '$))))
                               
 
 ;;args, body copied from clojure.core_deftypes
-(defn- parse-specs
+#_(defn- parse-specs
 [specs]
   (loop [ret {} s specs]
       (if (seq s)

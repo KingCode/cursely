@@ -7,7 +7,29 @@
                    [debug :only [debug-info-1 debug-info]]]
         clojure.test
         [robert.hooke :as h]))
-                
+
+#_(h/add-hook #'is-marked-literal? #'debug-info-1)
+#_(h/add-hook #'has-marked-coll? #'debug-info-1)
+
+(deftest transval-subform-test
+  (testing "Should adapt a marked collection literal in input form"
+    (is (= '(1 (recursely.ccore/hval [stack pos] [2 3])) (transval-subform '(1 $ [2 3]) '$)))
+    (is (= '(1 (recursely.ccore/hval [stack pos] [2 3])) (transval-subform '(1 $[2 3]) '$)))
+    (is (= '(cond (empty? coll) $0
+                :else (recursely.ccore/hval [stack pos] [2 3])) 
+            (transval-subform '(cond (empty? coll) $0 :else $[2 3]) '$))
+    )))
+
+(deftest transval-test
+   (testing "Should adapt all marked literals in input form"
+     (is (= '(1 (recursely.ccore/hval [stack pos] 2) 3) (transval '(1 $2 3) '$)))
+     (is (= '(cond (empty? coll) (recursely.ccore/hval [stack pos] 0)
+                :else (recursely.ccore/hval [stack pos] [2 3]))
+             (transval '(cond (empty? coll) $0 :else $[2 3]) '$)))
+     (is (= '(cond (= 1 x) (recursely.ccore/hval [stack pos] true) 
+                   (= 0 x) (recursely.ccore/hval [stack pos] false))
+             (transval '(cond (= 1 x) $true (= 0 x) $false) '$)))))
+
 
 (deftest transform-test-counter
   (testing "Simplest, recursive counter form should yield correct adapted form"
