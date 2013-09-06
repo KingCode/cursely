@@ -215,13 +215,6 @@ where each func spec is a name-args-body
 
 (declare transform transform-str transform-rest-str transform-rest-apply-str is-apply? starts-with?)
 
-(defn adapt-1
-"Transforms form into a form adapted for recursely usage. Yields the adapted form.
-"
-[ form regs ]
-   ;;(postwalk #(
-)
-
 
 (defn transform
 "Yields a form which invokes a sequence of hparam/hfn/hcall invocations according 
@@ -318,13 +311,13 @@ where each func spec is a name-args-body
          (-> fs (.startsWith ms)))))
 
 
-(defn funcpos-starts-with-marker?
+(defn form-starts-with-marker?
 "Yields true if a form has marker as the prefix to its first symbol if list,
  or prefixes form otherwise.
 "
 [ form marker]
    (and (list? form)
-        (-> (first form) str (.startsWith marker))))
+        (-> (first form) str (.startsWith (str marker)))))
 
 
 (defn transval-subform
@@ -357,6 +350,15 @@ where each func spec is a name-args-body
               tmp)))
                             
 
+(defn augment-params
+"Yields body with its parameters vector prepended with stack, pos. body must be a function
+ body, i.e. starting with a vector.
+"
+[ body ]
+  (let [ params (first body) impl (rest body) ]
+    (-> ['stack 'pos] (concat params) vec (cons impl))))
+
+
 (defn adapt-1
 "Adapts a single form body with markup, replacing in it marked up forms and literals with 
  one containing framework function calls where needed; regs is a sequential coll with
@@ -364,14 +366,14 @@ where each func spec is a name-args-body
  with their descendant forms; marker should be a symbol not used anywhere else than for this purpose,
  and defaults to '$.
 "
-([ regs body marker ]
-  (let [ tmp (transval body marker) ]
-    (postwalk #(cond (funcpos-starts-with-marker? % marker) 
-                         (let [ stripped (strip % marker) ]
-                                        (transform stripped))
-                      :else %) tmp))
-([ regs body ] 
-    (adapt-1 regs body '$))))
+([ body regs marker ]
+  (let [ tmp  (postwalk #(cond (form-starts-with-marker? % marker) 
+                         (let [ stripped (strip %) ]
+                                        (transform stripped regs))
+                      :else %) body) ]
+        (-> (augment-params tmp) (transval marker)))) 
+([ body regs ] 
+    (adapt-1 body regs '$)))
                               
 
 ;;args, body copied from clojure.core_deftypes

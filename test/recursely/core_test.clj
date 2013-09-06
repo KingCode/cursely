@@ -10,6 +10,38 @@
 
 #_(h/add-hook #'is-marked-literal? #'debug-info-1)
 #_(h/add-hook #'has-marked-coll? #'debug-info-1)
+#_(h/add-hook #'form-starts-with-marker? #'debug-info-1)
+#_(h/add-hook #'adapt-1 #'debug-info-1)
+
+
+(deftest augment-params-test
+  (testing "Should prepend framework meta params to src function params"
+    (is (= '([stack pos arg1 arg2] (yuk-yuk arg1 arg2))
+            (augment-params '([arg1 arg2] (yuk-yuk arg1 arg2)))))
+    (is (= '([stack pos coll] (if (empty? coll) $0 $1))
+            (augment-params '([ coll ] (if (empty? coll) $0 $1)))))))
+
+            
+(deftest form-starts-with-marker?-test
+  (testing "Should detect whether a form's function position is a marked element"
+    (is (form-starts-with-marker? '($45sd 2 3 =) '$))))
+
+
+(deftest has-marked-coll?-test
+  (testing "Should detect top-level literal colls within a form"
+    (is (has-marked-coll? '(1 $ [2 3]) '$))
+    (is (not (has-marked-coll? '(1 $2 3) '$)))
+    (is (has-marked-coll? '(cond (empty? coll) $() :else $0) '$))
+    (is (has-marked-coll? '(1 2 3 $"hello" 4 5) '$))
+    (is (not (has-marked-coll? '(cond (empty? coll) $0 :else $1) '$)))))
+
+
+(deftest is-marked-literal?-test
+  (testing "Should detect whether a form is a marked literal"
+    (is (is-marked-literal? '$2 '$))
+    (is (not (is-marked-literal? '1 '$)))
+    (is (not (is-marked-literal? '($2) '$)))))
+
 
 (deftest transval-subform-test
   (testing "Should adapt a marked collection literal in input form"
@@ -20,6 +52,7 @@
             (transval-subform '(cond (empty? coll) $0 :else $[2 3]) '$))
     )))
 
+
 (deftest transval-test
    (testing "Should adapt all marked literals in input form"
      (is (= '(1 (recursely.ccore/hval [stack pos] 2) 3) (transval '(1 $2 3) '$)))
@@ -28,7 +61,12 @@
              (transval '(cond (empty? coll) $0 :else $[2 3]) '$)))
      (is (= '(cond (= 1 x) (recursely.ccore/hval [stack pos] true) 
                    (= 0 x) (recursely.ccore/hval [stack pos] false))
-             (transval '(cond (= 1 x) $true (= 0 x) $false) '$)))))
+             (transval '(cond (= 1 x) $true (= 0 x) $false) '$)))
+     (is (= '([ coll ] (if (empty? coll) (recursely.ccore/hval [stack pos] 0) (+ 1 (counter (rest coll)))))
+            (transval '([ coll ]
+                        (if (empty? coll) $0
+                            (+ 1 (counter (rest coll)))))
+                       '$)))))
 
 
 (deftest transform-test-counter
@@ -234,4 +272,23 @@
 
                act (transform src #{'tak}) ]
 
+            (is (= exp act)))))
+
+
+(deftest adapt-1-test
+    (testing "Should translate an entire function body with markup and registered names provided"
+        (let [ src '([ coll ]
+                        (if (empty? coll) $0
+                            ($+ 1 (counter (rest coll)))))
+
+               exp '([ stack pos coll ]
+                        (if (empty? coll) (recursely.ccore/hval [stack pos] 0)
+                                (-> (recursely.ccore/hparam [stack pos] 1)
+                                    (recursely.ccore/hparam (rest coll))
+                                    (recursely.ccore/hcall (fn [arg1 arg2 arg3] (counter arg1 arg2 arg3))  1)
+                                    (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                                    (recursely.ccore/rewind pos))))
+               
+               act (adapt-1 src #{'counter}) ]
+    
             (is (= exp act)))))
