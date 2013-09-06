@@ -396,6 +396,43 @@
             (is (= exp act)))))
 
 
+(deftest adapt-1-test_variadic-counter
+    (testing "Should translate an entire function body with markup and registered names provided with variadic args"
+        (let [ src '([ & args ]
+                          (if (empty? args) $0
+                                ($+ 1 (apply count-args (rest args)))))
+
+               exp '([ stack pos & args]
+                        (if (empty? args) (recursely.ccore/hval [stack pos] 0)
+                                (-> (recursely.ccore/hparam [stack pos] 1)
+                                    (recursely.ccore/hparam-list (rest args))
+                                    (recursely.ccore/hcall (fn [& args] (apply count-args args)) (count (rest args)))
+                                    (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                                    (recursely.ccore/rewind pos))))
+
+               act (adapt-1 src #{'count-args}) ]
+            (is (= exp act)))))
+
+
+(deftest adapt-1-test_variadic-and
+    (testing "Should translate an entire function body with markup and registered names provided with variadic args"
+        (let [ src '([ & args ]
+                        (if (empty? args) $true
+                                ($and (first args) (apply recursive-and (rest args)))))
+
+               exp '([ stack pos & args]
+                        (if (empty? args) (recursely.ccore/hval [stack pos] true)
+                               (-> (recursely.ccore/hparam [stack pos] (first args))
+                                   (recursely.ccore/hparam-list (rest args))
+                                   (recursely.ccore/hcall (fn [& args] (apply recursive-and args)) (count (rest args)))
+                                   (recursely.ccore/hfn (fn [arg1 arg2] (and arg1 arg2)) 2)
+                                   (recursely.ccore/rewind pos))))
+
+               act (adapt-1 src #{'recursive-and}) ]
+            (is (= exp act)))))
+
 #_(deftest adapt
     (testing "Adapt should transform an entire multi-arity fn definition"
         (let [])))
+
+
