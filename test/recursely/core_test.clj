@@ -271,11 +271,10 @@
                         (recursely.ccore/rewind pos))                        
 
                act (transform src #{'tak}) ]
-
             (is (= exp act)))))
 
 
-(deftest adapt-1-test
+(deftest adapt-1-test-counter
     (testing "Should translate an entire function body with markup and registered names provided"
         (let [ src '([ coll ]
                         (if (empty? coll) $0
@@ -290,5 +289,78 @@
                                     (recursely.ccore/rewind pos))))
                
                act (adapt-1 src #{'counter}) ]
+            (is (= exp act)))))
+
+
+(deftest adapt-1-test-recursive-odd?
+    (testing "Should translate an entire function body with markup and registered names provided"
+        (let [ src '([ x ]
+                       (cond (= 1 x) $true
+                             (= 0 x) $false
+                            :else
+                              ($recursive-odd? (- x 2))))
+               
+               exp '([ stack pos x ]
+                        (cond (= 1 x) (recursely.ccore/hval [stack pos] true)
+                              (= 0 x) (recursely.ccore/hval [stack pos] false)
+                            :else
+                                (-> (recursely.ccore/hparam [stack pos] (- x 2))
+                                    (recursely.ccore/hcall (fn [arg1 arg2 arg3] (recursive-odd? arg1 arg2 arg3)) 1)
+                                    (recursely.ccore/rewind pos))))
+
+               act (adapt-1 src #{'recursive-odd?}) ]
+            (is (= exp act)))))
     
+
+(deftest adapt-1-test-nested_hofstadter
+    (testing "Should translate an entire function body with markup and registered names provided"
+        (let [ src '([ n ]
+                      (if (zero? n) $0
+                            ($- n (female (male (dec n))))))
+
+               exp '([ stack pos n]
+                      (if (zero? n) (recursely.ccore/hval [stack pos] 0)
+                            (-> (recursely.ccore/hparam [stack pos] n)
+                                (recursely.ccore/hparam (dec n))
+                                (recursely.ccore/hcall (fn [arg1 arg2 arg3] (male arg1 arg2 arg3)) 1)
+                                (recursely.ccore/hcall (fn [arg1 arg2 arg3] (female arg1 arg2 arg3)) 1)
+                                (recursely.ccore/hfn (fn [arg1 arg2] (- arg1 arg2)) 2)
+                                (recursely.ccore/rewind pos))))
+
+               act (adapt-1 src #{'male 'female}) ]
+            (is (= exp act)))))
+
+                      
+(deftest adapt-1-test-nested_KS
+    (testing "Should translate an entire function body with markup and registered names provided"
+        (let [ src '([ coll, capacity ]
+                      (if (empty? coll) $0
+                            (let [ [c v] (-> (first coll) ((fn [arg] (vector (cost arg) (value arg)))))
+                                    tail (rest coll) ]
+                                   (if (-> c (> capacity))
+                                       ($KS tail capacity)
+                                       ($max (KS tail capacity)  (+ v (KS tail (- capacity c))))))))
+
+              exp '([ stack pos coll capacity ]
+                     (if (empty? coll) (recursely.ccore/hval [stack pos] 0)
+                            (let [ [c v] (-> (first coll) ((fn [arg] (vector (cost arg) (value arg)))))
+                                    tail (rest coll) ]
+                                (if (-> c (> capacity))
+                                    (-> (recursely.ccore/hparam [stack pos] tail)
+                                        (recursely.ccore/hparam capacity)
+                                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (KS arg1 arg2 arg3 arg4)) 2)
+                                        (recursely.ccore/rewind pos))
+
+                                    (-> (recursely.ccore/hparam [stack pos] tail)
+                                        (recursely.ccore/hparam capacity)
+                                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (KS arg1 arg2 arg3 arg4)) 2)
+                                        (recursely.ccore/hparam v)
+                                        (recursely.ccore/hparam tail)
+                                        (recursely.ccore/hparam (- capacity c))
+                                        (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4] (KS arg1 arg2 arg3 arg4)) 2)
+                                        (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                                        (recursely.ccore/hfn (fn [arg1 arg2] (max arg1 arg2)) 2)
+                                        (recursely.ccore/rewind pos))))))
+
+                act (adapt-1 src #{'KS}) ]
             (is (= exp act)))))
