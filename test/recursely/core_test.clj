@@ -364,3 +364,38 @@
 
                 act (adapt-1 src #{'KS}) ]
             (is (= exp act)))))
+
+
+(deftest adapt-1-test_power-counter
+    (testing "Should translate an entire function body with markup and registered names provided"
+        (let [ src '([ power-in-numbers1 factor power-in-numbers2 coll ]
+                          (if (empty? coll) $factor
+                                ($power-counter (rest power-in-numbers1)
+                                    (* factor (+ (counter power-in-numbers1)
+                                                 (counter power-in-numbers2)))
+                                    (rest power-in-numbers2)
+                                    (rest coll))))
+
+               exp '([ stack pos power-in-numbers1 factor power-in-numbers2 coll ]
+                        (if (empty? coll) (recursely.ccore/hval [stack pos] factor)
+                            (-> (recursely.ccore/hparam [stack pos] (rest power-in-numbers1))
+                                (recursely.ccore/hparam factor)
+                                (recursely.ccore/hparam power-in-numbers1)
+                                (recursely.ccore/hcall (fn [arg1 arg2 arg3] (counter arg1 arg2 arg3)) 1) 
+                                (recursely.ccore/hparam power-in-numbers2)
+                                (recursely.ccore/hcall (fn [arg1 arg2 arg3] (counter arg1 arg2 arg3)) 1)
+                                (recursely.ccore/hfn (fn [arg1 arg2] (+ arg1 arg2)) 2)
+                                (recursely.ccore/hfn (fn [arg1 arg2] (* arg1 arg2)) 2)
+                                (recursely.ccore/hparam (rest power-in-numbers2))
+                                (recursely.ccore/hparam (rest coll))
+                                (recursely.ccore/hcall (fn [arg1 arg2 arg3 arg4 arg5 arg6] 
+                                                                (power-counter arg1 arg2 arg3 arg4 arg5 arg6)) 4)
+                                (recursely.ccore/rewind pos))))
+
+                act (adapt-1 src #{'power-counter 'counter}) ]
+            (is (= exp act)))))
+
+
+#_(deftest adapt
+    (testing "Adapt should transform an entire multi-arity fn definition"
+        (let [])))
